@@ -4,7 +4,7 @@ const pool = require("../config/db");
 
 passport.use(new GoogleStrategy({
   clientID: "394853156717-1947i2tce9etqbu7foil6upajrljmrpb.apps.googleusercontent.com",
-  clientSecret: "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",
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   callbackURL: "/api/auth/google/callback"
 },
 async (accessToken, refreshToken, profile, done) => {
