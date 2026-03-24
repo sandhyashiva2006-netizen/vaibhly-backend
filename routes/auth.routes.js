@@ -11,7 +11,7 @@ const router = express.Router();
 /* ================= STUDENT REGISTER =================*/
 router.post("/register", async (req, res) => {
   console.log("🔥 NEW REGISTER ROUTE ACTIVE 🔥");
-
+console.log("Sending:", { name, email, password });
   try {
     const { name, email, password, referral } = req.body;
 
@@ -91,7 +91,7 @@ router.post("/register", async (req, res) => {
 
   } catch (err) {
     console.error("REGISTER ERROR:", err);
-    res.status(400).json({
+    res.status(500).json({
       success: false,
       error: err.message,
     });
