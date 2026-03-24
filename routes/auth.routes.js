@@ -28,7 +28,7 @@ console.log("Sending:", { name, email, password });
   `INSERT INTO users (name, email, password, role)
    VALUES ($1, $2, $3, $4)
    RETURNING *`,
-  [name, email, hashedPassword, "student"] // 👈 ADD DEFAULT ROLE
+  [name, email, password, "student"] // 👈 ADD DEFAULT ROLE
 );
 
     const newUser = result.rows[0]; // ✅ DEFINE ONLY ONCE
@@ -88,6 +88,8 @@ console.log("Sending:", { name, email, password });
         referral_code: referralCode,
       },
     });
+
+res.json({ success: true, user: result.rows[0] });
 
   } catch (err) {
     console.error("REGISTER ERROR:", err);
