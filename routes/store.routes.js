@@ -134,8 +134,7 @@ console.log("TOKEN USER ID:", userId);
       FROM orders o
       JOIN order_items oi ON oi.order_id = o.id
       JOIN courses c ON c.id = oi.course_id
-      WHERE o.user_id = $1
-      ORDER BY o.created_at DESC
+            ORDER BY o.created_at DESC
     `, [userId]);
 
     res.json(result.rows);
