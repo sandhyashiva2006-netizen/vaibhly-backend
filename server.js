@@ -264,7 +264,9 @@ setInterval(async () => {
   `);
 }, 60 * 60 * 1000);
 
-app.get("/*", (req, res) => {
-  res.sendFile(path.join(__dirname, "client", "index.html"));
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+
+  res.sendFile(path.join(CLIENT_ROOT, "index.html"));
 });
 
