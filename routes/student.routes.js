@@ -38,14 +38,14 @@ u.role,
 router.get("/jobs", verifyToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, title, company FROM jobs ORDER BY id DESC
+      SELECT id, title, company FROM recruiter_jobs ORDER BY id DESC
     `);
 
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to load jobs" });
-  }
+  console.error("JOBS ERROR:", err);  // 🔥 ADD THIS
+  res.status(500).json({ error: "Failed to load jobs" });
+}
 });
 
 
@@ -59,7 +59,7 @@ router.get("/applied", verifyToken, async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    console.error("JOBS ERROR:", err);
     res.status(500).json({ error: "Failed to load applied jobs" });
   }
 });
@@ -78,7 +78,7 @@ router.post("/apply/:jobId", verifyToken, async (req, res) => {
     res.json({ success: true });
 
   } catch (err) {
-    console.error(err);
+    console.error("JOBS ERROR:", err);
     res.status(500).json({ error: "Apply failed" });
   }
 });
@@ -97,7 +97,7 @@ router.get("/my-applications", verifyToken, async (req, res) => {
     res.json(result.rows);
 
   } catch (err) {
-    console.error(err);
+    console.error("JOBS ERROR:", err);
     res.status(500).json({ error: "Failed to load applications" });
   }
 });
