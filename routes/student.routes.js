@@ -101,10 +101,10 @@ router.post("/apply/:jobId", verifyToken, async (req, res) => {
 router.get("/my-applications", verifyToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT j.title, a.status, a.applied_at
-      FROM job_applications a
-      JOIN jobs j ON j.id = a.job_id
-      WHERE a.student_id = $1
+      SELECT a.job_id, j.title, a.status, a.applied_at
+FROM job_applications a
+JOIN jobs j ON j.id = a.job_id
+WHERE a.student_id = $1
     `, [req.user.id]);
 
     res.json(result.rows);
