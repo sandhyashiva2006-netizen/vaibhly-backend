@@ -39,7 +39,7 @@ router.get("/jobs", verifyToken, async (req, res) => {
   try {
 
     const result = await pool.query(`
-      SELECT *
+      SELECT id, title, company_name, description, location
       FROM jobs
       ORDER BY id DESC
     `);
@@ -47,7 +47,7 @@ router.get("/jobs", verifyToken, async (req, res) => {
     res.json(result.rows);
 
   } catch (err) {
-    console.error("JOBS ERROR:", err);
+    console.error("JOBS ERROR:", err); // 🔥 THIS WILL SHOW REAL ERROR
     res.status(500).json({ error: "Failed to load jobs" });
   }
 });
