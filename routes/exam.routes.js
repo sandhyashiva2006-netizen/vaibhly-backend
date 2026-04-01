@@ -271,17 +271,12 @@ router.get("/results", verifyToken, async (req, res) => {
 ====================================================== */
 router.post("/submit", verifyToken, async (req, res) => {
   try {
+
     console.log("📥 BACKEND RECEIVED:", req.body);
+    console.log("USER:", req.user);
 
     const userId = req.user.id;
     const { exam_id, answers } = req.body;
-
-const examRes = await pool.query(
-  `SELECT course_id FROM exams WHERE id = $1`,
-  [exam_id]
-);
-
-const courseId = examRes.rows[0]?.course_id;
 
     if (!exam_id || !answers) {
       return res.status(400).json({
@@ -290,28 +285,37 @@ const courseId = examRes.rows[0]?.course_id;
       });
     }
 
+    /* ================= GET COURSE ID ================= */
+
+    const examRes = await pool.query(
+      `SELECT course_id FROM exams WHERE id = $1`,
+      [exam_id]
+    );
+
+    const courseId = examRes.rows[0]?.course_id;
+
+    console.log("COURSE ID:", courseId);
+
+    if (!courseId) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid exam → course mapping"
+      });
+    }
+
     /* ================= ATTEMPT LIMIT ================= */
 
     const attemptCheck = await pool.query(
-      `
-      SELECT COUNT(*) FROM exam_attempts
-      WHERE user_id = $1 AND exam_id = $2
-      `,
+      `SELECT COUNT(*) FROM exam_attempts WHERE user_id = $1 AND exam_id = $2`,
       [userId, exam_id]
     );
 
     const attempts = Number(attemptCheck.rows[0].count);
 
-    console.log("🧪 Attempts:", attempts);
-
     const MAX_ATTEMPTS = 5;
 
-    // 🔥 FIX: allow retry if already passed
     const alreadyPassed = await pool.query(
-      `
-      SELECT 1 FROM exam_attempts
-      WHERE user_id = $1 AND exam_id = $2 AND status = 'PASSED'
-      `,
+      `SELECT 1 FROM exam_attempts WHERE user_id = $1 AND exam_id = $2 AND status = 'PASSED'`,
       [userId, exam_id]
     );
 
@@ -326,21 +330,15 @@ const courseId = examRes.rows[0]?.course_id;
 
     const qRes = await pool.query(
       `
-      SELECT id, correct_option
-      FROM questions
-      WHERE exam_id = $1
+      SELECT id, correct_option FROM questions WHERE exam_id = $1
 
       UNION ALL
 
-      SELECT id, correct_answer AS correct_option
-      FROM exam_questions
-      WHERE course_id = $1
+      SELECT id, correct_answer AS correct_option FROM exam_questions WHERE course_id = $1
 
       UNION ALL
 
-      SELECT id, correct_option
-      FROM competitive_questions
-      WHERE exam_id = $1
+      SELECT id, correct_option FROM competitive_questions WHERE exam_id = $1
       `,
       [exam_id]
     );
@@ -394,25 +392,23 @@ const courseId = examRes.rows[0]?.course_id;
 
     if (status === "PASSED") {
 
-      // 🔥 prevent duplicate certificate
+      // ✅ FIX: use courseId (not exam_id)
       const existingCert = await pool.query(
-        `
-        SELECT certificate_id FROM certificates
-        WHERE user_id = $1 AND course_id = $2
-        `,
-        [userId, exam_id]
+        `SELECT certificate_id FROM certificates WHERE user_id = $1 AND course_id = $2`,
+        [userId, courseId]
       );
 
       if (existingCert.rows.length > 0) {
         certificateId = existingCert.rows[0].certificate_id;
       } else {
+
         certificateId =
           "EDU-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
-       await pool.query(`
-  INSERT INTO certificates (user_id, course_id, score, percentage)
-  VALUES ($1, $2, $3, $4)
-`, [req.user.id, courseId, score, percentage]);
+        await pool.query(`
+          INSERT INTO certificates (user_id, course_id, score, percentage)
+          VALUES ($1, $2, $3, $4)
+        `, [userId, courseId, correctCount, percentage]);
       }
     }
 
