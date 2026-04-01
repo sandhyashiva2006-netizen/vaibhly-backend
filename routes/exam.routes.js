@@ -406,9 +406,9 @@ router.post("/submit", verifyToken, async (req, res) => {
           "EDU-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
         await pool.query(`
-          INSERT INTO certificates (user_id, course_id, score, percentage)
-          VALUES ($1, $2, $3, $4)
-        `, [userId, courseId, correctCount, percentage]);
+  INSERT INTO certificates (user_id, course_id, percentage)
+  VALUES ($1, $2, $3)
+`, [userId, courseId, percentage]);
       }
     }
 
