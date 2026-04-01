@@ -276,6 +276,13 @@ router.post("/submit", verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { exam_id, answers } = req.body;
 
+const examRes = await pool.query(
+  `SELECT course_id FROM exams WHERE id = $1`,
+  [exam_id]
+);
+
+const courseId = examRes.rows[0]?.course_id;
+
     if (!exam_id || !answers) {
       return res.status(400).json({
         success: false,
@@ -402,19 +409,10 @@ router.post("/submit", verifyToken, async (req, res) => {
         certificateId =
           "EDU-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
-        await pool.query(
-          `
-          INSERT INTO certificates
-          (user_id, course_id, certificate_id, type, issued_at)
-          VALUES ($1,$2,$3,$4,NOW())
-          `,
-          [
-            userId,
-            exam_id,
-            certificateId,
-            "course"   // ✅ FIXED
-          ]
-        );
+       await pool.query(`
+  INSERT INTO certificates (user_id, course_id, score, percentage)
+  VALUES ($1, $2, $3, $4)
+`, [req.user.id, courseId, score, percentage]);
       }
     }
 
