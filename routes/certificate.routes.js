@@ -203,40 +203,43 @@ router.get("/my", verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     const result = await pool.query(`
-  SELECT 
-    c.certificate_id,
-    c.created_at AS issued_at,
-    co.title AS course_name,
-    e.title AS exam_name
+      /* ================= NORMAL CERTIFICATES ================= */
+      SELECT 
+        c.certificate_id,
+        c.created_at AS issued_at,
+        co.title AS course_name,
+        e.title AS exam_name,
+        NULL AS score,
+        NULL AS total_questions
 
-  FROM certificates c
+      FROM certificates c
 
-  LEFT JOIN courses co ON co.id = c.course_id
-  LEFT JOIN exams e ON e.course_id = c.course_id
+      LEFT JOIN courses co ON co.id = c.course_id
+      LEFT JOIN exams e ON e.course_id = c.course_id
 
-  WHERE c.user_id = $1
+      WHERE c.user_id = $1
 
-  ORDER BY c.created_at DESC
-`, [req.user.id]);
+      UNION ALL
 
-  UNION ALL
+      /* ================= EXAM RESULT CERTIFICATES ================= */
+      SELECT
+        r.certificate_id,
+        r.attempted_at AS issued_at,
+        co.title AS course_name,
+        e.title AS exam_name,
+        r.score,
+        r.total_questions
 
-  /* ADMIN EXAM CERTIFICATES */
-  SELECT
-    r.certificate_id,
-    r.attempted_at AS issued_at,
-    co.title AS course_name,
-    e.title AS exam_name,
-    r.score,
-    r.total_questions
-  FROM exam_results r
-  JOIN exams e ON e.id = r.exam_id
-  LEFT JOIN courses co ON co.id = e.course_id
-  WHERE r.user_id = $1
-  AND r.status = 'PASSED'
+      FROM exam_results r
 
-  ORDER BY issued_at DESC
-`, [userId]);
+      JOIN exams e ON e.id = r.exam_id
+      LEFT JOIN courses co ON co.id = e.course_id
+
+      WHERE r.user_id = $1
+      AND r.status = 'PASSED'
+
+      ORDER BY issued_at DESC
+    `, [userId]);
 
     res.json({ certificates: result.rows });
 
@@ -245,6 +248,5 @@ router.get("/my", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Failed to load certificates" });
   }
 });
-
 
 module.exports = router;
