@@ -21,6 +21,7 @@ router.get("/latest", verifyToken, async (req, res) => {
       LEFT JOIN exams e ON e.id = c.exam_id
       LEFT JOIN users u ON u.id = c.user_id
       WHERE c.user_id = $1
+      AND c.certificate_id IS NOT NULL   -- ✅ FIX
       ORDER BY c.issued_at DESC
       LIMIT 1
     `, [userId]);
@@ -38,7 +39,6 @@ router.get("/latest", verifyToken, async (req, res) => {
     res.status(500).json({ error: "Failed to load certificate" });
   }
 });
-
 
 /* ================= VERIFY CERTIFICATE ================= */
 router.get("/verify/:id", async (req, res) => {
