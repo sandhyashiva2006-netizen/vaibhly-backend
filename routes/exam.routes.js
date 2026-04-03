@@ -303,6 +303,21 @@ router.post("/submit", verifyToken, async (req, res) => {
       });
     }
 
+/* ================= VALIDATE USER COURSE ACCESS ================= */
+
+const accessCheck = await pool.query(
+  `SELECT 1 FROM user_courses 
+   WHERE user_id = $1 AND course_id = $2`,
+  [userId, courseId]
+);
+
+if (accessCheck.rows.length === 0) {
+  return res.status(403).json({
+    success: false,
+    error: "You are not enrolled in this course"
+  });
+}
+
     /* ================= ATTEMPT LIMIT ================= */
 
     const attemptCheck = await pool.query(
@@ -319,12 +334,19 @@ router.post("/submit", verifyToken, async (req, res) => {
       [userId, exam_id]
     );
 
-    if (attempts >= MAX_ATTEMPTS && alreadyPassed.rows.length === 0) {
-      return res.status(403).json({
-        success: false,
-        error: "Maximum attempts reached"
-      });
-    }
+    if (alreadyPassed.rows.length > 0) {
+  return res.status(400).json({
+    success: false,
+    error: "You already passed this exam"
+  });
+}
+
+if (attempts >= MAX_ATTEMPTS) {
+  return res.status(403).json({
+    success: false,
+    error: "Maximum attempts reached"
+  });
+}
 
     /* ================= LOAD QUESTIONS ================= */
 
@@ -340,7 +362,7 @@ router.post("/submit", verifyToken, async (req, res) => {
 
       SELECT id, correct_option FROM competitive_questions WHERE exam_id = $1
       `,
-      [exam_id]
+      [courseId]
     );
 
     const totalQuestions = Object.keys(answers).length;
@@ -392,11 +414,12 @@ let certificateId = null;
 
 if (status === "PASSED") {
 
-  // ✅ check if already exists (avoid duplicates)
-  const existingCert = await pool.query(`
-    SELECT certificate_id FROM certificates
-    WHERE user_id = $1 AND course_id = $2
-  `, [userId, courseId]);
+  // ✅ Check if certificate already exists (based on exam)
+  const existingCert = await pool.query(
+    `SELECT certificate_id FROM certificates
+     WHERE user_id = $1 AND exam_id = $2`,
+    [userId, exam_id]   // ✅ FIXED variable
+  );
 
   if (existingCert.rows.length > 0) {
 
@@ -404,15 +427,16 @@ if (status === "PASSED") {
 
   } else {
 
-    // ✅ generate new ID
+    // ✅ generate new certificate id
     certificateId =
       "EDU-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
     // ✅ insert certificate
-    await pool.query(`
-      INSERT INTO certificates (user_id, course_id, percentage, certificate_id)
-      VALUES ($1, $2, $3)
-    `, [userId, courseId, percentage, certificateId]);
+    await pool.query(
+      `INSERT INTO certificates (certificate_id, user_id, exam_id, course_id, issued_at)
+       VALUES ($1,$2,$3,$4,NOW())`,
+      [certificateId, userId, exam_id, courseId]
+    );
   }
 }
 
