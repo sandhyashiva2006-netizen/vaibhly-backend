@@ -260,8 +260,25 @@ router.post("/submit", verifyToken, async (req, res) => {
 
 const examRes = await pool.query(
   `SELECT course_id FROM exams WHERE id = $1`,
-  [exam_id]   // ✅ correct variable
+  [examId]
 );
+
+const courseId = examRes.rows[0]?.course_id;
+
+const result = await pool.query(`
+SELECT id, question, option_a, option_b, option_c, option_d
+FROM questions WHERE exam_id = $1
+
+UNION ALL
+
+SELECT id, question, option_a, option_b, option_c, option_d
+FROM exam_questions WHERE course_id = $2
+
+UNION ALL
+
+SELECT id, question, option_a, option_b, option_c, option_d
+FROM competitive_questions WHERE exam_id = $1
+`, [examId, courseId]);
 
 const courseId = examRes.rows[0]?.course_id;
 

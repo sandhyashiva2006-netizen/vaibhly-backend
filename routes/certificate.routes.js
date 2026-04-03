@@ -36,7 +36,7 @@ JOIN users u ON u.id = c.user_id
 
 LEFT JOIN courses co ON co.id = c.course_id
 LEFT JOIN competitive_exams ce ON ce.id = c.course_id
-LEFT JOIN exams e ON e.id = c.course_id
+LEFT JOIN exams e ON e.id = c.exam_id
 
 WHERE c.user_id = $1
 
