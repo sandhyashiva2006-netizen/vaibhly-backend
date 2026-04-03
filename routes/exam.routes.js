@@ -260,10 +260,42 @@ router.post("/submit", verifyToken, async (req, res) => {
 
 const examRes = await pool.query(
   `SELECT course_id FROM exams WHERE id = $1`,
-  [exam_id]
+  [examId]
 );
 
 const courseId = examRes.rows[0]?.course_id;
+
+const result = await pool.query(`
+SELECT id, question, option_a, option_b, option_c, option_d
+FROM questions WHERE exam_id = $1
+
+UNION ALL
+
+SELECT id, question, option_a, option_b, option_c, option_d
+FROM exam_questions WHERE course_id = $2
+
+UNION ALL
+
+SELECT id, question, option_a, option_b, option_c, option_d
+FROM competitive_questions WHERE exam_id = $1
+`, [examId, courseId]);
+
+
+
+/* ================= VALIDATE USER COURSE ACCESS ================= */
+
+const accessCheck = await pool.query(
+  `SELECT 1 FROM user_courses 
+   WHERE user_id = $1 AND course_id = $2`,
+  [userId, courseId]
+);
+
+if (accessCheck.rows.length === 0) {
+  return res.status(403).json({
+    success: false,
+    error: "You are not enrolled in this course"
+  });
+}
 
 /* ================= USE IT BELOW ================= */
 
@@ -282,21 +314,6 @@ const qRes = await pool.query(
   `,
   [exam_id, courseId]
 );
-
-/* ================= VALIDATE USER COURSE ACCESS ================= */
-
-const accessCheck = await pool.query(
-  `SELECT 1 FROM user_courses 
-   WHERE user_id = $1 AND course_id = $2`,
-  [userId, courseId]
-);
-
-if (accessCheck.rows.length === 0) {
-  return res.status(403).json({
-    success: false,
-    error: "You are not enrolled in this course"
-  });
-}
 
     /* ================= ATTEMPT LIMIT ================= */
 
@@ -328,32 +345,7 @@ if (attempts >= MAX_ATTEMPTS) {
   });
 }
 
-    /* ================= LOAD QUESTIONS ================= */
-
-   const qRes = await pool.query(
-  `
-  SELECT id, correct_option FROM questions WHERE exam_id = $1
-
-  UNION ALL
-
-  SELECT id, correct_answer AS correct_option 
-  FROM exam_questions WHERE course_id = $2
-
-  UNION ALL
-
-  SELECT id, correct_option FROM competitive_questions WHERE exam_id = $1
-  `,
-  [exam_id, courseId]
-);
-
-    const totalQuestions = Object.keys(answers).length;
-
-    if (totalQuestions === 0) {
-      return res.status(400).json({
-        success: false,
-        error: "No questions found for this exam"
-      });
-    }
+    
 
     /* ================= CALCULATE SCORE ================= */
 
