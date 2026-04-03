@@ -10,21 +10,22 @@ router.get("/latest", verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     const result = await pool.query(`
-      SELECT 
-        c.certificate_id,
-        c.issued_at,
-        co.title AS course_title,
-        e.title AS exam_title,
-        u.name AS student_name
-      FROM certificates c
-      LEFT JOIN courses co ON co.id = c.course_id
-      LEFT JOIN exams e ON e.id = c.exam_id
-      LEFT JOIN users u ON u.id = c.user_id
-      WHERE c.user_id = $1
-      AND c.certificate_id IS NOT NULL   -- ✅ FIX
-      ORDER BY c.issued_at DESC
-      LIMIT 1
-    `, [userId]);
+  SELECT 
+    c.certificate_id,
+    c.issued_at,
+    co.title AS course_title,
+    e.title AS exam_title,
+    u.name AS student_name
+  FROM certificates c
+  LEFT JOIN courses co ON co.id = c.course_id
+  LEFT JOIN exams e ON e.id = c.exam_id
+  LEFT JOIN users u ON u.id = c.user_id
+  WHERE c.user_id = $1
+  ORDER BY 
+    (c.certificate_id IS NULL),  -- ✅ push NULL to bottom
+    c.issued_at DESC
+  LIMIT 1
+`, [userId]);
 
     if (!result.rows.length) {
       return res.status(404).json({
