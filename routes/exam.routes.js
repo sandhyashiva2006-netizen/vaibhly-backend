@@ -99,37 +99,8 @@ const normalExams = await pool.query(`
   WHERE uc.user_id = $1
 `, [userId]);
 
-    /* ===== COURSE FINAL EXAMS ===== */
 
-    const courseExams = await pool.query(`
-  SELECT
-    q.course_id AS id,
-    'Final Course Exam' AS title,
-    CASE
-      WHEN EXISTS (
-        SELECT 1
-        FROM certificates c
-        WHERE c.course_id = q.course_id
-          AND c.user_id = $1
-      )
-      THEN 'COMPLETED'
-      ELSE 'NOT_ATTEMPTED'
-    END AS status
-  FROM exam_questions q
-  JOIN user_courses uc ON uc.course_id = q.course_id
-  WHERE uc.user_id = $1
-  GROUP BY q.course_id
-`, [userId]);
-
-
-    /* ===== MERGE BOTH LISTS ===== */
-
-    const exams = [
-      ...normalExams.rows,
-      ...courseExams.rows
-    ];
-
-    res.json(exams);
+     res.json(normalExams.rows);
 
   } catch (err) {
 
@@ -288,11 +259,13 @@ router.post("/submit", verifyToken, async (req, res) => {
     /* ================= GET COURSE ID ================= */
 
     const examRes = await pool.query(
-      `SELECT course_id FROM exams WHERE id = $1`,
-      [exam_id]
-    );
+  `SELECT course_id FROM exams WHERE id=$1`,
+  [examId]
+);
 
-    const courseId = examRes.rows[0]?.course_id;
+const courseId = examRes.rows[0]?.course_id;
+
+`, [examId, courseId]);
 
     console.log("COURSE ID:", courseId);
 
@@ -350,20 +323,21 @@ if (attempts >= MAX_ATTEMPTS) {
 
     /* ================= LOAD QUESTIONS ================= */
 
-    const qRes = await pool.query(
-      `
-      SELECT id, correct_option FROM questions WHERE exam_id = $1
+   const qRes = await pool.query(
+  `
+  SELECT id, correct_option FROM questions WHERE exam_id = $1
 
-      UNION ALL
+  UNION ALL
 
-      SELECT id, correct_answer AS correct_option FROM exam_questions WHERE course_id = $1
+  SELECT id, correct_answer AS correct_option 
+  FROM exam_questions WHERE course_id = $2
 
-      UNION ALL
+  UNION ALL
 
-      SELECT id, correct_option FROM competitive_questions WHERE exam_id = $1
-      `,
-      [courseId]
-    );
+  SELECT id, correct_option FROM competitive_questions WHERE exam_id = $1
+  `,
+  [exam_id, courseId]
+);
 
     const totalQuestions = Object.keys(answers).length;
 
@@ -414,11 +388,10 @@ let certificateId = null;
 
 if (status === "PASSED") {
 
-  // ✅ Check if certificate already exists (based on exam)
   const existingCert = await pool.query(
     `SELECT certificate_id FROM certificates
      WHERE user_id = $1 AND exam_id = $2`,
-    [userId, exam_id]   // ✅ FIXED variable
+    [userId, exam_id]
   );
 
   if (existingCert.rows.length > 0) {
@@ -427,13 +400,12 @@ if (status === "PASSED") {
 
   } else {
 
-    // ✅ generate new certificate id
     certificateId =
       "EDU-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
-    // ✅ insert certificate
     await pool.query(
-      `INSERT INTO certificates (certificate_id, user_id, exam_id, course_id, issued_at)
+      `INSERT INTO certificates 
+       (certificate_id, user_id, exam_id, course_id, issued_at)
        VALUES ($1,$2,$3,$4,NOW())`,
       [certificateId, userId, exam_id, courseId]
     );

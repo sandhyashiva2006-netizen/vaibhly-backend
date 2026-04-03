@@ -203,49 +203,56 @@ router.get("/my", verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     const result = await pool.query(`
-      /* ================= NORMAL CERTIFICATES ================= */
-      SELECT 
+      SELECT DISTINCT ON (c.certificate_id)
         c.certificate_id,
-        c.created_at AS issued_at,
+        c.issued_at,
+
+        /* course name */
         co.title AS course_name,
+
+        /* exam name */
         e.title AS exam_name,
-        NULL AS score,
-        NULL AS total_questions
 
-      FROM certificates c
-
-      LEFT JOIN courses co ON co.id = c.course_id
-      LEFT JOIN exams e ON e.course_id = c.course_id
-
-      WHERE c.user_id = $1
-
-      UNION ALL
-
-      /* ================= EXAM RESULT CERTIFICATES ================= */
-      SELECT
-        r.certificate_id,
-        r.attempted_at AS issued_at,
-        co.title AS course_name,
-        e.title AS exam_name,
+        /* optional score (latest attempt) */
         r.score,
         r.total_questions
 
-      FROM exam_results r
+      FROM certificates c
 
-      JOIN exams e ON e.id = r.exam_id
-      LEFT JOIN courses co ON co.id = e.course_id
+      /* course */
+      LEFT JOIN courses co 
+        ON co.id = c.course_id
 
-      WHERE r.user_id = $1
-      AND r.status = 'PASSED'
+      /* exam */
+      LEFT JOIN exams e 
+        ON e.id = c.exam_id
 
-      ORDER BY issued_at DESC
+      /* latest result (optional, no duplicates) */
+      LEFT JOIN LATERAL (
+        SELECT r1.score, r1.total_questions
+        FROM exam_results r1
+        WHERE r1.user_id = c.user_id
+        AND r1.exam_id = c.exam_id
+        ORDER BY r1.attempted_at DESC
+        LIMIT 1
+      ) r ON true
+
+      WHERE c.user_id = $1
+
+      ORDER BY c.certificate_id, c.issued_at DESC
     `, [userId]);
 
-    res.json({ certificates: result.rows });
+    res.json({
+      success: true,
+      certificates: result.rows
+    });
 
   } catch (err) {
     console.error("❌ Load certificates error:", err);
-    res.status(500).json({ error: "Failed to load certificates" });
+    res.status(500).json({
+      success: false,
+      error: "Failed to load certificates"
+    });
   }
 });
 
