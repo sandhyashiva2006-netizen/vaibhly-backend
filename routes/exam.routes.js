@@ -17,20 +17,37 @@ router.get("/:examId/questions", verifyToken, async (req, res) => {
 
     console.log("Loading exam questions for:", examId);
 
-    const result = await pool.query(`
-SELECT id, question, option_a, option_b, option_c, option_d
-FROM questions WHERE exam_id = $1
+    const examRes = await pool.query(
+  `SELECT course_id FROM exams WHERE id = $1`,
+  [examId]
+);
 
-UNION ALL
+const courseId = examRes.rows[0]?.course_id;
 
-SELECT id, question, option_a, option_b, option_c, option_d
-FROM exam_questions WHERE course_id = $1
+let result;
 
-UNION ALL
+if (!courseId) {
 
-SELECT id, question, option_a, option_b, option_c, option_d
-FROM competitive_questions WHERE exam_id = $1
-`, [examId]);
+  // ✅ COMPETITIVE EXAM
+  result = await pool.query(`
+    SELECT id, question, option_a, option_b, option_c, option_d
+    FROM competitive_questions
+    WHERE exam_id = $1
+  `, [examId]);
+
+} else {
+
+  // ✅ COURSE EXAM
+  result = await pool.query(`
+    SELECT id, question, option_a, option_b, option_c, option_d
+    FROM questions WHERE exam_id = $1
+
+    UNION ALL
+
+    SELECT id, question, option_a, option_b, option_c, option_d
+    FROM exam_questions WHERE course_id = $2
+  `, [examId, courseId]);
+}
 
     console.log("Questions found:", result.rows.length);
 
@@ -284,37 +301,61 @@ FROM competitive_questions WHERE exam_id = $1
 
 /* ================= VALIDATE USER COURSE ACCESS ================= */
 
-const accessCheck = await pool.query(
-  `SELECT 1 FROM user_courses 
-   WHERE user_id = $1 AND course_id = $2`,
-  [userId, courseId]
+// check if it's a course-based exam
+const isCourseExam = await pool.query(
+  `SELECT course_id FROM exams WHERE id = $1`,
+  [exam_id]
 );
 
-if (accessCheck.rows.length === 0) {
-  return res.status(403).json({
-    success: false,
-    error: "You are not enrolled in this course"
-  });
+const courseId = isCourseExam.rows[0]?.course_id;
+
+if (courseId) {
+
+  const accessCheck = await pool.query(
+    `SELECT 1 FROM user_courses 
+     WHERE user_id = $1 AND course_id = $2`,
+    [userId, courseId]
+  );
+
+  if (accessCheck.rows.length === 0) {
+    return res.status(403).json({
+      success: false,
+      error: "You are not enrolled in this course"
+    });
+  }
 }
 
-/* ================= USE IT BELOW ================= */
+// ✅ if no courseId → allow (competitive exam)
 
-const qRes = await pool.query(
-  `
-  SELECT id, correct_option FROM questions WHERE exam_id = $1
+/* ================= LOAD QUESTIONS ================= */
 
-  UNION ALL
+let qRes;
 
-  SELECT id, correct_answer AS correct_option 
-  FROM exam_questions WHERE course_id = $2
+if (!courseId) {
 
-  UNION ALL
+  // ✅ COMPETITIVE EXAM → ONLY competitive_questions
+  qRes = await pool.query(
+    `SELECT id, correct_option 
+     FROM competitive_questions 
+     WHERE exam_id = $1`,
+    [exam_id]
+  );
 
-  SELECT id, correct_option FROM competitive_questions WHERE exam_id = $1
-  `,
-  [exam_id, courseId]
-);
+} else {
 
+  // ✅ COURSE EXAM → questions + exam_questions
+  qRes = await pool.query(
+    `
+    SELECT id, correct_option FROM questions WHERE exam_id = $1
+
+    UNION ALL
+
+    SELECT id, correct_answer AS correct_option 
+    FROM exam_questions WHERE course_id = $2
+    `,
+    [exam_id, courseId]
+  );
+}
     /* ================= ATTEMPT LIMIT ================= */
 
     const attemptCheck = await pool.query(
