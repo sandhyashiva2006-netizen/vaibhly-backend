@@ -26,7 +26,7 @@ const courseId = examRes.rows[0]?.course_id;
 
 let result;
 
-if (!courseId) {
+if (examType === "competitive") {
 
   // ✅ COMPETITIVE EXAM
   result = await pool.query(`
@@ -288,8 +288,15 @@ const courseId = examRes.rows[0]?.course_id;
 /* ================= VALIDATE USER COURSE ACCESS ================= */
 
 
+const examInfo = await pool.query(
+  `SELECT course_id, type FROM exams WHERE id = $1`,
+  [exam_id]
+);
 
-if (courseId) {
+const courseId = examInfo.rows[0]?.course_id;
+const examType = examInfo.rows[0]?.type;
+
+if (examType === "course") {
 
   const accessCheck = await pool.query(
     `SELECT 1 FROM user_courses 
@@ -305,13 +312,11 @@ if (courseId) {
   }
 }
 
-// ✅ if no courseId → allow (competitive exam)
-
 /* ================= LOAD QUESTIONS ================= */
 
 let qRes;
 
-if (!courseId) {
+if (examType === "competitive") {
 
   // ✅ COMPETITIVE EXAM → ONLY competitive_questions
   qRes = await pool.query(
