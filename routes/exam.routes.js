@@ -345,7 +345,14 @@ if (attempts >= MAX_ATTEMPTS) {
   });
 }
 
-    
+    const totalQuestions = Object.keys(answers).length;
+
+if (totalQuestions === 0) {
+  return res.status(400).json({
+    success: false,
+    error: "No questions found for this exam"
+  });
+}
 
     /* ================= CALCULATE SCORE ================= */
 
