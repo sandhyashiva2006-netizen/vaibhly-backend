@@ -15,15 +15,32 @@ router.get("/latest", verifyToken, async (req, res) => {
     c.issued_at,
     co.title AS course_title,
     e.title AS exam_title,
-    u.name AS student_name
+    u.name AS student_name,
+
+    /* ✅ ADD THIS */
+    r.score,
+    r.total_questions
+
   FROM certificates c
+
   LEFT JOIN courses co ON co.id = c.course_id
   LEFT JOIN exams e ON e.id = c.exam_id
   LEFT JOIN users u ON u.id = c.user_id
+
+  /* ✅ JOIN RESULTS */
+  LEFT JOIN LATERAL (
+    SELECT score, total_questions
+    FROM exam_results
+    WHERE user_id = c.user_id
+    AND exam_id = c.exam_id
+    ORDER BY attempted_at DESC
+    LIMIT 1
+  ) r ON true
+
   WHERE c.user_id = $1
-  ORDER BY 
-    (c.certificate_id IS NULL),  -- ✅ push NULL to bottom
-    c.issued_at DESC
+  AND c.certificate_id IS NOT NULL
+
+  ORDER BY c.issued_at DESC
   LIMIT 1
 `, [userId]);
 
