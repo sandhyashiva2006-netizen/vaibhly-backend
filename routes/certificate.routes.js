@@ -10,36 +10,42 @@ router.get("/latest", verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     const result = await pool.query(`
-  SELECT 
-    c.certificate_id,
-    c.issued_at,
-    co.title AS course_title,
-    e.title AS exam_title,
-    u.name AS student_name,
+SELECT 
+  c.certificate_id,
+  c.issued_at,
+  u.name AS student_name,
 
-    /* ✅ ADD THIS */
-    r.score,
-    r.total_questions
+  CASE 
+    WHEN e.type = 'competitive' THEN NULL
+    ELSE co.title
+  END AS course_title,
 
-  FROM certificates c
+  CASE 
+    WHEN e.type = 'competitive' THEN e.title
+    ELSE NULL
+  END AS exam_title,
 
-  LEFT JOIN courses co ON co.id = c.course_id
-  LEFT JOIN exams e ON e.id = c.exam_id
-  LEFT JOIN users u ON u.id = c.user_id
+  r.score,
+  r.total_questions
 
-  /* ✅ JOIN RESULTS */
-  LEFT JOIN LATERAL (
-    SELECT score, total_questions
-    FROM exam_results
-    WHERE user_id = c.user_id
-    AND exam_id = c.exam_id
-    ORDER BY attempted_at DESC
-    LIMIT 1
-  ) r ON true
+FROM certificates c
+LEFT JOIN exams e ON e.id = c.exam_id
+LEFT JOIN courses co ON co.id = c.course_id
+LEFT JOIN users u ON u.id = c.user_id
 
-  WHERE c.user_id = $1
-  AND c.certificate_id IS NOT NULL
+LEFT JOIN LATERAL (
+  SELECT score, total_questions
+  FROM exam_results
+  WHERE user_id = c.user_id
+  AND exam_id = c.exam_id
+  ORDER BY attempted_at DESC
+  LIMIT 1
+) r ON true
 
+WHERE c.user_id = $1
+AND c.certificate_id IS NOT NULL
+ORDER BY c.issued_at DESC
+LIMIT 1
   ORDER BY c.issued_at DESC
   LIMIT 1
 `, [userId]);

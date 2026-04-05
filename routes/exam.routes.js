@@ -110,9 +110,10 @@ const normalExams = await pool.query(`
     CASE
       WHEN EXISTS (
   SELECT 1
-  FROM certificates c
-  WHERE c.exam_id = e.id
-  AND c.user_id = $1
+  FROM exam_attempts ea
+  WHERE ea.exam_id = e.id
+  AND ea.user_id = $1
+  AND ea.status = 'PASSED'
 )
       THEN 'COMPLETED'
       ELSE 'NOT_ATTEMPTED'
