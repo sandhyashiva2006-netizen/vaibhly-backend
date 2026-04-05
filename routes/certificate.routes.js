@@ -23,27 +23,16 @@ SELECT
   CASE 
     WHEN e.type = 'competitive' THEN e.title
     ELSE NULL
-  END AS exam_title,
-
-  r.score,
-  r.total_questions
+  END AS exam_title
 
 FROM certificates c
 LEFT JOIN exams e ON e.id = c.exam_id
 LEFT JOIN courses co ON co.id = c.course_id
 LEFT JOIN users u ON u.id = c.user_id
 
-LEFT JOIN LATERAL (
-  SELECT score, total_questions
-  FROM exam_results
-  WHERE user_id = c.user_id
-  AND exam_id = c.exam_id
-  ORDER BY attempted_at DESC
-  LIMIT 1
-) r ON true
-
 WHERE c.user_id = $1
 AND c.certificate_id IS NOT NULL
+
 ORDER BY c.issued_at DESC
 LIMIT 1
 `, [userId]);
