@@ -10,49 +10,56 @@ const EXAM_UNLOCK_COST = 200; // same for all exams
 ====================================================== */
 
 router.get("/:examId/questions", verifyToken, async (req, res) => {
-
-console.log("ExamId:", examId);
-console.log("CourseId:", courseId);
-console.log("ExamType:", examType);
-
   try {
 
-const examRes = await pool.query(
-  `SELECT course_id, type FROM exams WHERE id = $1`,
-  [examId]
-);
+    const examId = Number(req.params.examId);
 
-const courseId = examRes.rows[0]?.course_id;
-const examType = examRes.rows[0]?.type;
+    if (!examId) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid exam ID"
+      });
+    }
 
-let result;
+    const examRes = await pool.query(
+      `SELECT course_id, type FROM exams WHERE id = $1`,
+      [examId]
+    );
 
-if (examType === "competitive") {
+    if (!examRes.rows.length) {
+      return res.status(404).json({
+        success: false,
+        error: "Exam not found"
+      });
+    }
 
-  // ✅ ONLY competitive questions
-  result = await pool.query(`
-    SELECT id, question, option_a, option_b, option_c, option_d
-    FROM competitive_questions
-    WHERE exam_id = $1
-  `, [examId]);
+    const courseId = examRes.rows[0].course_id;
+    const examType = examRes.rows[0].type;
 
-} else {
+    let result;
 
-  // ✅ COURSE exam
-  result = await pool.query(`
-    SELECT id, question, option_a, option_b, option_c, option_d
-    FROM questions
-    WHERE exam_id = $1
+    if (examType === "competitive") {
 
-    UNION ALL
+      result = await pool.query(`
+        SELECT id, question, option_a, option_b, option_c, option_d
+        FROM competitive_questions
+        WHERE exam_id = $1
+      `, [examId]);
 
-    SELECT id, question, option_a, option_b, option_c, option_d
-    FROM exam_questions
-    WHERE course_id = $2
-  `, [examId, courseId]);
-}
+    } else {
 
-    console.log("Questions found:", result.rows.length);
+      result = await pool.query(`
+        SELECT id, question, option_a, option_b, option_c, option_d
+        FROM questions
+        WHERE exam_id = $1
+
+        UNION ALL
+
+        SELECT id, question, option_a, option_b, option_c, option_d
+        FROM exam_questions
+        WHERE course_id = $2
+      `, [examId, courseId]);
+    }
 
     if (!result.rows.length) {
       return res.json({
@@ -61,7 +68,7 @@ if (examType === "competitive") {
       });
     }
 
-    const formatted = result.rows.map(q => ({
+    const questions = result.rows.map(q => ({
       id: q.id,
       question: q.question,
       options: [
@@ -74,20 +81,16 @@ if (examType === "competitive") {
 
     res.json({
       success: true,
-      questions: formatted
+      questions
     });
 
   } catch (err) {
-
-    console.error("Questions route error:", err);
-
+    console.error("❌ Questions error:", err);
     res.status(500).json({
       success: false,
       error: "Failed to load questions"
     });
-
   }
-
 });
 
 /* ======================================================
@@ -134,96 +137,6 @@ const normalExams = await pool.query(`
 });
 
 
-/* ======================================================
-   LOAD EXAM QUESTIONS
-====================================================== */
-router.get("/:examId", verifyToken, async (req, res) => {
-  try {
-
-    const examId = Number(req.params.examId);
-
-/* ===== ADMIN EXAM QUESTIONS ===== */
-const adminQuestions = await pool.query(`
-SELECT
- id,
- question,
- option_a,
- option_b,
- option_c,
- option_d
-FROM questions
-WHERE exam_id = $1
-`, [examId]);
-
-/* ===== COURSE FINAL EXAM QUESTIONS ===== */
-const courseQuestions = await pool.query(`
-SELECT
- id,
- question,
- option_a,
- option_b,
- option_c,
- option_d
-FROM exam_questions
-WHERE course_id=$1
-`, [examId]);
-
-/* ===== COMPETITIVE EXAM QUESTIONS ===== */
-const competitiveQuestions = await pool.query(
-`
-SELECT
- id,
- question,
- option_a,
- option_b,
- option_c,
- option_d
-FROM competitive_questions
-WHERE exam_id = $1
-`,
-[examId]
-);
-
-const allQuestions = [
-  ...adminQuestions.rows,
-  ...courseQuestions.rows,
-  ...competitiveQuestions.rows
-];
-
-if (!allQuestions.length) {
-  return res.json({
-    success: false,
-    questions: []
-  });
-}
-
-const questions = allQuestions.map(q => ({
-  id: q.id,
-  question: q.question,
-  options: [
-    q.option_a,
-    q.option_b,
-    q.option_c,
-    q.option_d
-  ]
-}));
-
-res.json({
-  success: true,
-  questions
-});
-
-  } catch (err) {
-
-    console.error("❌ exam load error:", err);
-
-    res.status(500).json({
-      success: false,
-      error: "Failed to load exam"
-    });
-
-  }
-});
 
 
 /* ======================================================
