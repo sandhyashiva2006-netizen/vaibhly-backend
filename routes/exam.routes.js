@@ -346,9 +346,14 @@ if (status === "PASSED") {
 
     await pool.query(
   `INSERT INTO certificates 
-   (certificate_id, user_id, exam_id, course_id, issued_at)
-   VALUES ($1,$2,$3,$4,NOW())`,
-  [certificateId, userId, exam_id, courseId]
+   (user_id, exam_id, course_id, certificate_id, issued_at)
+   VALUES ($1, $2, $3, $4, NOW())`,
+  [
+    userId,
+    exam_id,
+    examType === "course" ? courseId : null,  // ✅ IMPORTANT FIX
+    certificateId
+  ]
 );
   }
 }

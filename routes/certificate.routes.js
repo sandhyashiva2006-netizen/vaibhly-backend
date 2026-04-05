@@ -46,14 +46,10 @@ WHERE c.user_id = $1
 AND c.certificate_id IS NOT NULL
 ORDER BY c.issued_at DESC
 LIMIT 1
-  ORDER BY c.issued_at DESC
-  LIMIT 1
 `, [userId]);
 
     if (!result.rows.length) {
-      return res.status(404).json({
-        error: "No certificate found"
-      });
+      return res.json(null); // ✅ IMPORTANT (no error)
     }
 
     res.json(result.rows[0]);
