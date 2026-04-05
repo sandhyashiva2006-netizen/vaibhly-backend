@@ -22,8 +22,6 @@ router.get("/:examId/questions", verifyToken, async (req, res) => {
   [examId]
 );
 
-const courseId = examRes.rows[0]?.course_id;
-
 let result;
 
 if (examType === "competitive") {
@@ -273,14 +271,6 @@ router.post("/submit", verifyToken, async (req, res) => {
       });
     }
 
-   /* ================= GET COURSE ID ================= */
-
-const examRes = await pool.query(
-  `SELECT course_id FROM exams WHERE id = $1`,
-  [exam_id]
-);
-
-const courseId = examRes.rows[0]?.course_id;
 
 
 
