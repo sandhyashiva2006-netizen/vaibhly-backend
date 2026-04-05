@@ -11,22 +11,25 @@ const EXAM_UNLOCK_COST = 200; // same for all exams
 
 router.get("/:examId/questions", verifyToken, async (req, res) => {
 
+console.log("ExamId:", examId);
+console.log("CourseId:", courseId);
+console.log("ExamType:", examType);
+
   try {
 
-    const examId = Number(req.params.examId);
-
-    console.log("Loading exam questions for:", examId);
-
-    const examRes = await pool.query(
-  `SELECT course_id FROM exams WHERE id = $1`,
+const examRes = await pool.query(
+  `SELECT course_id, type FROM exams WHERE id = $1`,
   [examId]
 );
+
+const courseId = examRes.rows[0]?.course_id;
+const examType = examRes.rows[0]?.type;
 
 let result;
 
 if (examType === "competitive") {
 
-  // ✅ COMPETITIVE EXAM
+  // ✅ ONLY competitive questions
   result = await pool.query(`
     SELECT id, question, option_a, option_b, option_c, option_d
     FROM competitive_questions
@@ -35,15 +38,17 @@ if (examType === "competitive") {
 
 } else {
 
-  // ✅ COURSE EXAM
+  // ✅ COURSE exam
   result = await pool.query(`
     SELECT id, question, option_a, option_b, option_c, option_d
-    FROM questions WHERE exam_id = $1
+    FROM questions
+    WHERE exam_id = $1
 
     UNION ALL
 
     SELECT id, question, option_a, option_b, option_c, option_d
-    FROM exam_questions WHERE course_id = $2
+    FROM exam_questions
+    WHERE course_id = $2
   `, [examId, courseId]);
 }
 
