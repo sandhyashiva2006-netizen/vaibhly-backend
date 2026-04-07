@@ -262,9 +262,13 @@ if (examType === "competitive") {
     const MAX_ATTEMPTS = 5;
 
     const alreadyPassed = await pool.query(
-      `SELECT 1 FROM exam_attempts WHERE user_id = $1 AND exam_id = $2 AND status = 'PASSED'`,
-      [userId, exam_id]
-    );
+  `SELECT * FROM exam_attempts 
+   WHERE user_id = $1 
+   AND exam_id = $2 
+   AND status = 'PASSED'
+   LIMIT 1`,
+  [userId, exam_id]
+);
 
     if (alreadyPassed.rows.length > 0) {
   return res.status(400).json({
@@ -344,18 +348,39 @@ if (status === "PASSED") {
     certificateId =
       "EDU-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
-    await pool.query(
+  await pool.query(
   `INSERT INTO certificates 
    (user_id, exam_id, course_id, certificate_id, issued_at)
    VALUES ($1, $2, $3, $4, NOW())`,
   [
     userId,
     exam_id,
-    examType === "course" ? courseId : null,  // ✅ IMPORTANT FIX
+    examType === "competitive" ? null : courseId,  // 🔥 FIX
     certificateId
   ]
 );
   }
+}
+
+/* ================= 🎁 ADD COINS (NEW) ================= */
+
+  const coinReward = examType === "competitive" ? 30 : 20;
+
+  await pool.query(`
+    INSERT INTO user_coins (user_id, coins)
+    VALUES ($1, $2)
+    ON CONFLICT (user_id)
+    DO UPDATE SET coins = user_coins.coins + EXCLUDED.coins
+  `, [userId, coinReward]);
+
+}
+
+if (status === "FAILED") {
+  await pool.query(`
+    UPDATE user_coins 
+    SET coins = coins + 5
+    WHERE user_id = $1
+  `, [userId]);
 }
 
 /* ================= SAVE RESULT ================= */
