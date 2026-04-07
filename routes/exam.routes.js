@@ -373,7 +373,6 @@ if (status === "PASSED") {
     DO UPDATE SET coins = user_coins.coins + EXCLUDED.coins
   `, [userId, coinReward]);
 
-}
 
 if (status === "FAILED") {
   await pool.query(`
