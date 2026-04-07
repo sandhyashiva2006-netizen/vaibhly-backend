@@ -406,25 +406,25 @@ if (examExists.rows.length > 0) {
   ]);
 }
 
-    /* ================= RESPONSE ================= */
+ /* ================= RESPONSE ================= */
 
-    return res.json({
-      success: true,
-      score: correctCount,
-      total: totalQuestions,
-      percentage,
-      status,
-      certificateId
-    });
+return res.json({
+  success: true,
+  score: correctCount,
+  total: totalQuestions,
+  percentage,
+  status,
+  certificateId
+});
 
-  } catch (err) {
-    console.error("❌ exam submit error:", err);
+} catch (err) {
+  console.error("❌ exam submit error:", err);
 
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
-  }
+  return res.status(500).json({
+    success: false,
+    error: err.message
+  });
+}
 });
 
 /* ================= CREATE EXAM ================= */
