@@ -15,15 +15,17 @@ SELECT
   c.issued_at,
   u.name AS student_name,
 
+ -- 🔥 FIX: dynamic title
   CASE 
-    WHEN e.type = 'competitive' THEN NULL
+    WHEN c.exam_id IS NOT NULL THEN e.title
     ELSE co.title
-  END AS course_title,
+  END AS course_name,
 
+  -- 🔥 FIX: exam name only for exam certs
   CASE 
-    WHEN e.type = 'competitive' THEN e.title
+    WHEN c.exam_id IS NOT NULL THEN e.title
     ELSE NULL
-  END AS exam_title
+  END AS exam_name
 
 FROM certificates c
 LEFT JOIN exams e ON e.id = c.exam_id
