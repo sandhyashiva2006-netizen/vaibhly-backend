@@ -13,31 +13,27 @@ router.get("/latest", verifyToken, async (req, res) => {
 SELECT 
   c.certificate_id,
   c.issued_at,
-  u.name AS student_name,
 
- -- 🔥 FIX: dynamic title
+  -- ✅ FIX: correct field names
   CASE 
-    WHEN c.exam_id IS NOT NULL THEN e.title
+    WHEN c.exam_id IS NOT NULL THEN NULL
     ELSE co.title
-  END AS course_name,
+  END AS course_title,
 
-  -- 🔥 FIX: exam name only for exam certs
   CASE 
     WHEN c.exam_id IS NOT NULL THEN e.title
     ELSE NULL
-  END AS exam_name
+  END AS exam_title
 
 FROM certificates c
-LEFT JOIN exams e ON e.id = c.exam_id
+
 LEFT JOIN courses co ON co.id = c.course_id
-LEFT JOIN users u ON u.id = c.user_id
+LEFT JOIN exams e ON e.id = c.exam_id
 
 WHERE c.user_id = $1
 AND c.certificate_id IS NOT NULL
 
-ORDER BY c.issued_at DESC
-LIMIT 1
-`, [userId]);
+ORDER BY c.issued_at DESC;
 
     if (!result.rows.length) {
       return res.json(null); // ✅ IMPORTANT (no error)
