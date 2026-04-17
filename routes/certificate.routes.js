@@ -33,7 +33,10 @@ LEFT JOIN exams e ON e.id = c.exam_id
 WHERE c.user_id = $1
 AND c.certificate_id IS NOT NULL
 
-ORDER BY c.issued_at DESC;
+ ORDER BY c.issued_at DESC
+      `,
+      [userId]
+    );
 
     if (!result.rows.length) {
       return res.json(null); // ✅ IMPORTANT (no error)
