@@ -366,19 +366,19 @@ if (status === "PASSED") {
 
   const coinReward = examType === "competitive" ? 30 : 20;
 
-  await pool.query(`
-    INSERT INTO user_coins (user_id, coins)
-    VALUES ($1, $2)
-    ON CONFLICT (user_id)
-    DO UPDATE SET coins = user_coins.coins + EXCLUDED.coins
-  `, [userId, coinReward]);
+await pool.query(`
+  INSERT INTO user_wallets (user_id, coins)
+  VALUES ($1, $2)
+  ON CONFLICT (user_id)
+  DO UPDATE SET coins = user_wallets.coins + EXCLUDED.coins
+`, [userId, coinReward]);
 
 
 if (status === "FAILED") {
   await pool.query(`
-    UPDATE user_coins 
-    SET coins = coins + 5
-    WHERE user_id = $1
+    UPDATE user_wallets
+SET coins = coins + 5
+WHERE user_id = $1
   `, [userId]);
 }
 
