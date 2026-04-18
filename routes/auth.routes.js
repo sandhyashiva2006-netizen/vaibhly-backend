@@ -70,26 +70,45 @@ console.log("Sending:", { name, email, password });
         [referral]
       );
 
-      if (refUser.rows.length) {
-        await pool.query(
-          "UPDATE users SET referred_by=$1 WHERE id=$2",
-          [refUser.rows[0].id, newUser.id]
-        );
+    if (refUser.rows.length) {
 
-await pool.query(`
-UPDATE user_wallets
-SET coins = coins + 50
-WHERE user_id = $1
-`, [refUser.rows[0].id]);
+  const referrerId = refUser.rows[0].id;
 
-await pool.query(`
-UPDATE user_wallets
-SET coins = coins + 25
-WHERE user_id = $1
-`, [newUser.id]);
+  // Link user
+  await pool.query(
+    "UPDATE users SET referred_by=$1 WHERE id=$2",
+    [referrerId, newUser.id]
+  );
 
-      }
-    }
+  // Add coins to referrer
+  await pool.query(`
+    UPDATE user_wallets
+    SET coins = coins + 50
+    WHERE user_id = $1
+  `, [referrerId]);
+
+  // Add coins to new user
+  await pool.query(`
+    UPDATE user_wallets
+    SET coins = coins + 25
+    WHERE user_id = $1
+  `, [newUser.id]);
+
+  // Transaction history for referrer
+  await pool.query(`
+    INSERT INTO coin_transactions
+    (user_id,type,amount,reference_id)
+    VALUES ($1,'referral_bonus',50,$2)
+  `, [referrerId, newUser.id]);
+
+  // Transaction history for new user
+  await pool.query(`
+    INSERT INTO coin_transactions
+    (user_id,type,amount,reference_id)
+    VALUES ($1,'welcome_referral',25,$2)
+  `, [newUser.id, referrerId]);
+
+}
 
     // ✅ FINAL RESPONSE (ONLY ONCE)
     res.status(201).json({

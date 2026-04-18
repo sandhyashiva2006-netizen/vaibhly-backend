@@ -436,20 +436,25 @@ router.put("/update", verifyToken, async (req, res) => {
 });
 
 router.get("/referrals", verifyToken, async (req,res)=>{
-  const userId = req.user.id;
+  try{
+    const userId = req.user.id || req.user.user_id;
 
-  const refs = await pool.query(`
-    SELECT id, name, created_at
-    FROM users
-    WHERE referred_by = $1
-    ORDER BY created_at DESC
-  `,[userId]);
+    const refs = await pool.query(`
+      SELECT id,name,email,created_at
+      FROM users
+      WHERE referred_by = $1
+      ORDER BY created_at DESC
+    `,[userId]);
 
-  res.json({
-    success:true,
-    referrals: refs.rows,
-    total: refs.rows.length
-  });
+    res.json({
+      success:true,
+      total: refs.rows.length,
+      referrals: refs.rows
+    });
+
+  }catch(err){
+    res.status(500).json({error:"Failed"});
+  }
 });
 
 module.exports = router;
