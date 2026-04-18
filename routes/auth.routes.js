@@ -76,32 +76,34 @@ router.post("/register", async (req, res) => {
     `, [referralCode, newUser.id]);
 
     // referral reward
-   if (referral && referral.trim() !== "") {
+if (referral && referral.trim() !== "") {
 
-  const cleanCode =
-    referral.trim().toUpperCase();
+  const cleanCode = referral.trim().toUpperCase();
 
-  console.log("Referral entered:", cleanCode);
+  console.log("RAW REFERRAL:", referral);
+  console.log("CLEAN REFERRAL:", cleanCode);
 
   const refUser = await pool.query(`
-    SELECT id, referral_code
+    SELECT id, name, referral_code
     FROM users
     WHERE TRIM(UPPER(referral_code)) = $1
     LIMIT 1
   `, [cleanCode]);
 
-  console.log("Referral match:", refUser.rows);
+  console.log("MATCHED USERS:", refUser.rows);
 
-  if (refUser.rows.length) {
+  if (refUser.rows.length > 0) {
 
-    const referrerId =
-      refUser.rows[0].id;
+    const referrerId = refUser.rows[0].id;
 
-    await pool.query(`
+    const updateRes = await pool.query(`
       UPDATE users
       SET referred_by = $1
       WHERE id = $2
+      RETURNING id, name, referred_by
     `, [referrerId, newUser.id]);
+
+    console.log("UPDATED USER:", updateRes.rows);
 
     await pool.query(`
       UPDATE user_wallets
@@ -114,6 +116,11 @@ router.post("/register", async (req, res) => {
       SET coins = coins + 25
       WHERE user_id = $1
     `, [newUser.id]);
+
+  } else {
+    console.log("NO REFERRAL MATCH FOUND");
+  }
+}
 
     await pool.query(`
       INSERT INTO coin_transactions
