@@ -435,4 +435,21 @@ router.put("/update", verifyToken, async (req, res) => {
 
 });
 
+router.get("/referrals", verifyToken, async (req,res)=>{
+  const userId = req.user.id;
+
+  const refs = await pool.query(`
+    SELECT id, name, created_at
+    FROM users
+    WHERE referred_by = $1
+    ORDER BY created_at DESC
+  `,[userId]);
+
+  res.json({
+    success:true,
+    referrals: refs.rows,
+    total: refs.rows.length
+  });
+});
+
 module.exports = router;
