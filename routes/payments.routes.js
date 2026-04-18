@@ -69,4 +69,37 @@ router.post("/verify-payment", verifyToken, async (req, res) => {
   }
 });
 
+router.post("/create-coin-order", verifyToken, async (req, res) => {
+  try {
+    const { pack } = req.body;
+
+    const packs = {
+      starter: { amount: 4900, coins: 250 },
+      popular: { amount: 9900, coins: 600 },
+      pro: { amount: 19900, coins: 1400 }
+    };
+
+    if (!packs[pack]) {
+      return res.status(400).json({ error: "Invalid pack" });
+    }
+
+    const order = await razorpay.orders.create({
+      amount: packs[pack].amount,
+      currency: "INR",
+      receipt: "coins_" + Date.now()
+    });
+
+    res.json({
+      success: true,
+      orderId: order.id,
+      amount: order.amount,
+      coins: packs[pack].coins
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to create order" });
+  }
+});
+
 module.exports = router;
