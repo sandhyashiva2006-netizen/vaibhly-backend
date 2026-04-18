@@ -75,6 +75,19 @@ console.log("Sending:", { name, email, password });
           "UPDATE users SET referred_by=$1 WHERE id=$2",
           [refUser.rows[0].id, newUser.id]
         );
+
+await pool.query(`
+UPDATE user_wallets
+SET coins = coins + 50
+WHERE user_id = $1
+`, [refUser.rows[0].id]);
+
+await pool.query(`
+UPDATE user_wallets
+SET coins = coins + 25
+WHERE user_id = $1
+`, [newUser.id]);
+
       }
     }
 
