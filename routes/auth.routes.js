@@ -14,116 +14,90 @@ router.post("/register", async (req, res) => {
     const { name, email, password, referral } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({
-        error: "All fields required"
-      });
+      return res.status(400).json({ error: "All fields required" });
     }
 
     const existing = await pool.query(
-      "SELECT id FROM users WHERE email=$1",
+      "SELECT id FROM users WHERE email = $1",
       [email]
     );
 
-    if (existing.rows.length) {
-      return res.status(400).json({
-        error: "Email already exists"
-      });
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: "Email already exists" });
     }
 
-    const hashedPassword =
-      await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const username = await generateUsername(name);
 
-    const username =
-      await generateUsername(name);
-
-    const result = await pool.query(`
-      INSERT INTO users
-      (name,email,password,role,username)
-      VALUES ($1,$2,$3,$4,$5)
-      RETURNING *
-    `, [
-      name,
-      email,
-      hashedPassword,
-      "student",
-      username
-    ]);
+    const result = await pool.query(
+      `INSERT INTO users (name, email, password, role, username)
+       VALUES ($1,$2,$3,$4,$5)
+       RETURNING *`,
+      [name, email, hashedPassword, "student", username]
+    );
 
     const newUser = result.rows[0];
 
-    // Wallet create
-    await pool.query(`
-      INSERT INTO user_wallets
-      (user_id,coins)
-      VALUES ($1,0)
-    `, [newUser.id]);
+    await pool.query(
+      `INSERT INTO user_wallets (user_id, coins)
+       VALUES ($1, 0)`,
+      [newUser.id]
+    );
 
-    // Referral code generate
-    const random =
-      Math.floor(1000 + Math.random() * 9000);
-
+    const random = Math.floor(1000 + Math.random() * 9000);
     const referralCode =
-      name.substring(0,4).toUpperCase() +
-      random +
-      newUser.id;
+      name.substring(0, 4).toUpperCase() + random + newUser.id;
 
-    await pool.query(`
-      UPDATE users
-      SET referral_code = $1
-      WHERE id = $2
-    `, [referralCode, newUser.id]);
+    await pool.query(
+      `UPDATE users
+       SET referral_code = $1
+       WHERE id = $2`,
+      [referralCode, newUser.id]
+    );
 
-    /* ================= REFERRAL BONUS ================= */
-  if (referral && referral.trim() !== "") {
+    if (referral && referral.trim() !== "") {
+      const cleanCode = referral.trim().toUpperCase();
 
-  const cleanCode = referral.trim().toUpperCase();
+      const refUser = await pool.query(
+        `SELECT id
+         FROM users
+         WHERE TRIM(UPPER(referral_code)) = $1
+         LIMIT 1`,
+        [cleanCode]
+      );
 
-  const refUser = await pool.query(`
-    SELECT id
-    FROM users
-    WHERE TRIM(UPPER(referral_code)) = $1
-    LIMIT 1
-  `, [cleanCode]);
+      if (refUser.rows.length > 0) {
+        const referrerId = refUser.rows[0].id;
 
-  if (refUser.rows.length > 0) {
+        await pool.query(
+          `UPDATE users
+           SET referred_by = $1
+           WHERE id = $2`,
+          [referrerId, newUser.id]
+        );
 
-    const referrerId = refUser.rows[0].id;
+        await pool.query(
+          `UPDATE user_wallets
+           SET coins = coins + 50
+           WHERE user_id = $1`,
+          [referrerId]
+        );
 
-    await pool.query(`
-      UPDATE users
-      SET referred_by = $1
-      WHERE id = $2
-    `, [referrerId, newUser.id]);
+        await pool.query(
+          `UPDATE user_wallets
+           SET coins = coins + 25
+           WHERE user_id = $1`,
+          [newUser.id]
+        );
 
-    await pool.query(`
-      UPDATE user_wallets
-      SET coins = coins + 50
-      WHERE user_id = $1
-    `, [referrerId]);
-
-    await pool.query(`
-      UPDATE user_wallets
-      SET coins = coins + 25
-      WHERE user_id = $1
-    `, [newUser.id]);
-
-  }
-}
-
-        // History
-        await pool.query(`
-          INSERT INTO coin_transactions
-          (user_id,type,amount,reference_id)
-          VALUES
-          ($1,'referral_bonus',50,$2),
-          ($3,'welcome_referral',25,$4)
-        `, [
-          referrerId,
-          newUser.id,
-          newUser.id,
-          referrerId
-        ]);
-
+        await pool.query(
+          `INSERT INTO coin_transactions
+           (user_id, type, amount, reference_id)
+           VALUES
+           ($1,'referral_bonus',50,$2),
+           ($3,'welcome_referral',25,$4)`,
+          [referrerId, newUser.id, newUser.id, referrerId]
+        );
       }
     }
 
@@ -140,13 +114,13 @@ router.post("/register", async (req, res) => {
 
   } catch (err) {
     console.error("REGISTER ERROR:", err);
-
     res.status(500).json({
       success: false,
       error: err.message
     });
   }
 });
+
 
 async function generateUsername(name) {
 
