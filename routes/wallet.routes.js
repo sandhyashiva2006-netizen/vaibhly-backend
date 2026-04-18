@@ -55,9 +55,24 @@ router.get("/streak", verifyToken, async (req, res) => {
 
 router.post("/reward-course", verifyToken, async (req, res) => {
   try {
-
     const userId = req.user.id;
     const { course_id } = req.body;
+
+    const already = await pool.query(`
+      SELECT 1
+      FROM coin_transactions
+      WHERE user_id = $1
+      AND type = 'course_complete'
+      AND reference_id = $2
+      LIMIT 1
+    `, [userId, course_id]);
+
+    if (already.rows.length) {
+      return res.json({
+        success: true,
+        message: "Already rewarded"
+      });
+    }
 
     await pool.query(`
       UPDATE user_wallets
@@ -67,7 +82,7 @@ router.post("/reward-course", verifyToken, async (req, res) => {
 
     await pool.query(`
       INSERT INTO coin_transactions
-      (user_id, type, amount, reference_id)
+      (user_id,type,amount,reference_id)
       VALUES ($1,'course_complete',50,$2)
     `, [userId, course_id]);
 

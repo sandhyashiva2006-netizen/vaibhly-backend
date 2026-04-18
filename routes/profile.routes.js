@@ -435,25 +435,23 @@ router.put("/update", verifyToken, async (req, res) => {
 
 });
 
-router.get("/referrals", verifyToken, async (req,res)=>{
-  try{
-    const userId = req.user.id || req.user.user_id;
-
-    const refs = await pool.query(`
+router.get("/referrals", verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
       SELECT id,name,email,created_at
       FROM users
       WHERE referred_by = $1
-      ORDER BY created_at DESC
-    `,[userId]);
+      ORDER BY id DESC
+    `, [req.user.id]);
 
     res.json({
-      success:true,
-      total: refs.rows.length,
-      referrals: refs.rows
+      success: true,
+      total: result.rows.length,
+      referrals: result.rows
     });
 
-  }catch(err){
-    res.status(500).json({error:"Failed"});
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load referrals" });
   }
 });
 
