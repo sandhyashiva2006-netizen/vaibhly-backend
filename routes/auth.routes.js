@@ -76,55 +76,59 @@ router.post("/register", async (req, res) => {
     `, [referralCode, newUser.id]);
 
     // referral reward
-    if (referral) {
+   if (referral && referral.trim() !== "") {
 
-      const refUser = await pool.query(`
-        SELECT id
-        FROM users
-        WHERE UPPER(referral_code)=UPPER($1)
-      `, [referral]);
+  const cleanCode =
+    referral.trim().toUpperCase();
 
-      if (refUser.rows.length) {
+  console.log("Referral entered:", cleanCode);
 
-        const referrerId =
-          refUser.rows[0].id;
+  const refUser = await pool.query(`
+    SELECT id, referral_code
+    FROM users
+    WHERE TRIM(UPPER(referral_code)) = $1
+    LIMIT 1
+  `, [cleanCode]);
 
-        // link user
-        await pool.query(`
-          UPDATE users
-          SET referred_by = $1
-          WHERE id = $2
-        `, [referrerId, newUser.id]);
+  console.log("Referral match:", refUser.rows);
 
-        // referrer +50
-        await pool.query(`
-          UPDATE user_wallets
-          SET coins = coins + 50
-          WHERE user_id = $1
-        `, [referrerId]);
+  if (refUser.rows.length) {
 
-        // new user +25
-        await pool.query(`
-          UPDATE user_wallets
-          SET coins = coins + 25
-          WHERE user_id = $1
-        `, [newUser.id]);
+    const referrerId =
+      refUser.rows[0].id;
 
-        // history
-        await pool.query(`
-          INSERT INTO coin_transactions
-          (user_id,type,amount,reference_id)
-          VALUES
-          ($1,'referral_bonus',50,$2),
-          ($3,'welcome_referral',25,$4)
-        `, [
-          referrerId,
-          newUser.id,
-          newUser.id,
-          referrerId
-        ]);
-      }
-    }
+    await pool.query(`
+      UPDATE users
+      SET referred_by = $1
+      WHERE id = $2
+    `, [referrerId, newUser.id]);
+
+    await pool.query(`
+      UPDATE user_wallets
+      SET coins = coins + 50
+      WHERE user_id = $1
+    `, [referrerId]);
+
+    await pool.query(`
+      UPDATE user_wallets
+      SET coins = coins + 25
+      WHERE user_id = $1
+    `, [newUser.id]);
+
+    await pool.query(`
+      INSERT INTO coin_transactions
+      (user_id,type,amount,reference_id)
+      VALUES
+      ($1,'referral_bonus',50,$2),
+      ($3,'welcome_referral',25,$4)
+    `, [
+      referrerId,
+      newUser.id,
+      newUser.id,
+      referrerId
+    ]);
+  }
+}
 
     res.status(201).json({
       success: true,
