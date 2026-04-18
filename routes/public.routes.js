@@ -462,27 +462,40 @@ router.get('/api/users/:id/following', async (req, res) => {
 });
 
 router.post('/api/posts', verifyToken, async (req, res) => {
-
   try {
-
     console.log("USER:", req.user);
+    console.log("BODY:", req.body);
 
-    const { title, type, content, image_url } = req.body;
+    const userId = req.user?.id;
 
-await pool.query(
-  `INSERT INTO posts (user_id, type, title, content, image_url)
-   VALUES ($1,$2,$3,$4,$5)`,
-  [userId, type, title, content, image_url || null]
-);
+    if (!userId) {
+      return res.status(401).json({ error: "Invalid user token" });
+    }
 
+    const {
+      title = "",
+      type = "learning",
+      content = "",
+      image_url = null
+    } = req.body || {};
 
-    res.json({ success: true });
+    const result = await pool.query(
+      `INSERT INTO posts
+       (user_id, type, title, content, image_url)
+       VALUES ($1,$2,$3,$4,$5)
+       RETURNING id`,
+      [userId, type, title, content, image_url]
+    );
+
+    res.json({
+      success: true,
+      postId: result.rows[0].id
+    });
 
   } catch (err) {
     console.error("POST ERROR:", err);
     res.status(500).json({ error: err.message });
   }
-
 });
 
 router.post('/api/posts/:id/like', verifyToken, async (req, res) => {
