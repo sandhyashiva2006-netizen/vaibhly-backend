@@ -356,6 +356,55 @@ router.get("/resume/me", verifyToken, async (req, res) => {
   }
 });
 
+router.get("/referrals", verifyToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id,name,email,created_at
+      FROM users
+      WHERE referred_by = $1
+      ORDER BY id DESC
+    `, [req.user.id]);
+
+    res.json({
+      success: true,
+      total: result.rows.length,
+      referrals: result.rows
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load referrals" });
+  }
+});
+
+router.get("/instructor/:id", async (req, res) => {
+  try {
+
+    const instructorId = Number(req.params.id);
+
+    const instructor = await pool.query(
+      "SELECT id, name, bio FROM users WHERE id = $1",
+      [instructorId]
+    );
+
+    const courses = await pool.query(
+      "SELECT id, title, price FROM courses WHERE instructor_id = $1",
+      [instructorId]
+    );
+
+    console.log("Instructor:", instructor.rows);
+    console.log("Courses:", courses.rows);
+
+    res.json({
+      instructor: instructor.rows[0] || {},
+      courses: courses.rows || []
+    });
+
+  } catch (err) {
+    console.error("Instructor error:", err);
+    res.status(500).json({ error: "Failed" });
+  }
+});
+
 router.get("/:username", async (req, res) => {
   try {
 
@@ -393,34 +442,7 @@ router.get("/:username", async (req, res) => {
   }
 });
 
-router.get("/instructor/:id", async (req, res) => {
-  try {
 
-    const instructorId = Number(req.params.id);
-
-    const instructor = await pool.query(
-      "SELECT id, name, bio FROM users WHERE id = $1",
-      [instructorId]
-    );
-
-    const courses = await pool.query(
-      "SELECT id, title, price FROM courses WHERE instructor_id = $1",
-      [instructorId]
-    );
-
-    console.log("Instructor:", instructor.rows);
-    console.log("Courses:", courses.rows);
-
-    res.json({
-      instructor: instructor.rows[0] || {},
-      courses: courses.rows || []
-    });
-
-  } catch (err) {
-    console.error("Instructor error:", err);
-    res.status(500).json({ error: "Failed" });
-  }
-});
 
 router.put("/update", verifyToken, async (req, res) => {
 
@@ -435,24 +457,6 @@ router.put("/update", verifyToken, async (req, res) => {
 
 });
 
-router.get("/referrals", verifyToken, async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT id,name,email,created_at
-      FROM users
-      WHERE referred_by = $1
-      ORDER BY id DESC
-    `, [req.user.id]);
 
-    res.json({
-      success: true,
-      total: result.rows.length,
-      referrals: result.rows
-    });
-
-  } catch (err) {
-    res.status(500).json({ error: "Failed to load referrals" });
-  }
-});
 
 module.exports = router;
