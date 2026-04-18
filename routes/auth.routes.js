@@ -74,49 +74,41 @@ router.post("/register", async (req, res) => {
     `, [referralCode, newUser.id]);
 
     /* ================= REFERRAL BONUS ================= */
-    if (referral && referral.trim() !== "") {
+  if (referral && referral.trim() !== "") {
 
-      const cleanCode =
-        referral.trim().toUpperCase();
+  const cleanCode = referral.trim().toUpperCase();
 
-      const refUser = await pool.query(`
-        SELECT id
-        FROM users
-        WHERE TRIM(UPPER(referral_code)) = $1
-        LIMIT 1
-      `, [cleanCode]);
+  const refUser = await pool.query(`
+    SELECT id
+    FROM users
+    WHERE TRIM(UPPER(referral_code)) = $1
+    LIMIT 1
+  `, [cleanCode]);
 
-      if (refUser.rows.length > 0) {
+  if (refUser.rows.length > 0) {
 
-        const referrerId =
-          refUser.rows[0].id;
+    const referrerId = refUser.rows[0].id;
 
-        // Save referred_by
-        await pool.query(`
-          UPDATE users
-          SET referred_by = $1
-          WHERE id = $2
-        `, [referrerId, newUser.id]);
+    await pool.query(`
+      UPDATE users
+      SET referred_by = $1
+      WHERE id = $2
+    `, [referrerId, newUser.id]);
 
-        // Referrer +50
-        await pool.query(`
-          UPDATE user_wallets
-          SET coins = coins + 50
-          WHERE user_id = $1
-        `, [referrerId]);
+    await pool.query(`
+      UPDATE user_wallets
+      SET coins = coins + 50
+      WHERE user_id = $1
+    `, [referrerId]);
 
-        // New user +25
-        await pool.query(`
-          UPDATE user_wallets
-          SET coins = coins + 25
-          WHERE user_id = $1
-        `, [newUser.id]);
+    await pool.query(`
+      UPDATE user_wallets
+      SET coins = coins + 25
+      WHERE user_id = $1
+    `, [newUser.id]);
 
-// give reward only once per course
-SELECT 1 FROM coin_transactions
-WHERE user_id=$1
-AND type='course_complete'
-AND reference_id=$2
+  }
+}
 
         // History
         await pool.query(`
