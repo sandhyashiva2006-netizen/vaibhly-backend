@@ -138,10 +138,48 @@ router.post("/buy", verifyToken, async (req, res) => {
   }
 });
 
-router.post("/buy-coins", verifyToken, async (req,res)=>{
-  return res.status(400).json({
-    error: "Payment gateway not connected yet"
-  });
+router.post("/buy-coins", verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { pack } = req.body;
+
+    const packs = {
+      starter: 250,
+      popular: 600,
+      pro: 1400
+    };
+
+    if (!packs[pack]) {
+      return res.status(400).json({
+        error: "Invalid pack"
+      });
+    }
+
+    const coins = packs[pack];
+
+    await pool.query(`
+      UPDATE users
+      SET coins = COALESCE(coins,0) + $1
+      WHERE id = $2
+    `, [coins, userId]);
+
+    await pool.query(`
+      INSERT INTO wallet_transactions
+      (user_id, amount, type)
+      VALUES ($1,$2,'coin_purchase')
+    `, [userId, coins]);
+
+    res.json({
+      success: true,
+      coins
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      error: "Purchase failed"
+    });
+  }
 });
 
 module.exports = router;
