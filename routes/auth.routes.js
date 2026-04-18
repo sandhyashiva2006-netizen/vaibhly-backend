@@ -112,6 +112,12 @@ router.post("/register", async (req, res) => {
           WHERE user_id = $1
         `, [newUser.id]);
 
+// give reward only once per course
+SELECT 1 FROM coin_transactions
+WHERE user_id=$1
+AND type='course_complete'
+AND reference_id=$2
+
         // History
         await pool.query(`
           INSERT INTO coin_transactions
