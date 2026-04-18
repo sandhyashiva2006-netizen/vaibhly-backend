@@ -150,23 +150,22 @@ router.post("/buy-coins", verifyToken, async (req, res) => {
     };
 
     if (!packs[pack]) {
-      return res.status(400).json({
-        error: "Invalid pack"
-      });
+      return res.status(400).json({ error: "Invalid pack" });
     }
 
     const coins = packs[pack];
 
     await pool.query(`
-      UPDATE users
-      SET coins = COALESCE(coins,0) + $1
-      WHERE id = $2
-    `, [coins, userId]);
+      INSERT INTO user_wallets (user_id, coins)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id)
+      DO UPDATE SET coins = user_wallets.coins + EXCLUDED.coins
+    `, [userId, coins]);
 
     await pool.query(`
-      INSERT INTO wallet_transactions
-      (user_id, amount, type)
-      VALUES ($1,$2,'coin_purchase')
+      INSERT INTO coin_transactions
+      (user_id, type, amount)
+      VALUES ($1, 'coin_purchase', $2)
     `, [userId, coins]);
 
     res.json({
@@ -176,9 +175,7 @@ router.post("/buy-coins", verifyToken, async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      error: "Purchase failed"
-    });
+    res.status(500).json({ error: "Purchase failed" });
   }
 });
 
