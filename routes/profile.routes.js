@@ -22,21 +22,20 @@ console.log("USER ID USED:", userId);
 
     console.log("👉 USER ID FROM TOKEN:", userId);
 
-const result = await pool.query(`
-SELECT
-  u.id,
-  u.name,
-  u.email,
-  u.bio,
-  u.referral_code,
-  (
-    SELECT COUNT(*)
-    FROM users x
-    WHERE x.referred_by = u.id
-  ) AS referrals_count
-FROM users u
-WHERE u.id = $1
-`, [userId]);
+    const result = await pool.query(
+  `
+  SELECT
+    id,
+    name,
+    email,
+    bio,
+    referral_code,
+    referred_by
+  FROM users
+  WHERE id = $1
+  `,
+  [userId]
+);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "User not found" });
