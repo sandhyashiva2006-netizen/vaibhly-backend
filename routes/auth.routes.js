@@ -5,13 +5,18 @@ const pool = require("../config/db");
 
 const router = express.Router();
 
-
+console.log("AUTH ROUTES LOADED - REFERRAL VERSION");
 
 
 /* ================= STUDENT REGISTER =================*/
 router.post("/register", async (req, res) => {
+console.log("REGISTER ROUTE HIT");
+
   try {
     const { name, email, password, referral } = req.body;
+
+console.log("REGISTER BODY:", req.body);
+console.log("REFERRAL VALUE:", referral);
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: "All fields required" });
@@ -58,6 +63,9 @@ router.post("/register", async (req, res) => {
     if (referral && referral.trim() !== "") {
       const cleanCode = referral.trim().toUpperCase();
 
+console.log("ENTERED REFERRAL BLOCK");
+console.log("CLEAN CODE:", referral.trim().toUpperCase());
+
       const refUser = await pool.query(
         `SELECT id
          FROM users
@@ -65,6 +73,8 @@ router.post("/register", async (req, res) => {
          LIMIT 1`,
         [cleanCode]
       );
+
+console.log("MATCH RESULT:", refUser.rows);
 
       if (refUser.rows.length > 0) {
         const referrerId = refUser.rows[0].id;
