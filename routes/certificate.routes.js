@@ -250,16 +250,46 @@ router.get("/", verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     const result = await pool.query(`
-      SELECT 
+      SELECT
         c.certificate_id,
         c.issued_at,
-        co.title AS course_title,
-        e.title AS exam_title
+        c.type,
+
+        /* COURSE TITLE */
+        CASE
+          WHEN c.type = 'competitive'
+            THEN ce.title
+          ELSE co.title
+        END AS course_name,
+
+        /* EXAM TITLE */
+        CASE
+          WHEN c.type = 'course'
+            THEN 'Final Course Exam'
+
+          WHEN c.type = 'competitive'
+            THEN ce.title
+
+          WHEN c.type = 'exam'
+            THEN e.title
+
+          ELSE 'Assessment'
+        END AS exam_name
+
       FROM certificates c
-      LEFT JOIN exams e ON e.id = c.exam_id
-      LEFT JOIN courses co ON co.id = c.course_id
+
+      LEFT JOIN courses co
+        ON co.id = c.course_id
+
+      LEFT JOIN competitive_exams ce
+        ON ce.id = c.course_id
+
+      LEFT JOIN exams e
+        ON e.id = c.exam_id
+
       WHERE c.user_id = $1
       AND c.certificate_id IS NOT NULL
+
       ORDER BY c.issued_at DESC
     `, [userId]);
 
@@ -267,7 +297,9 @@ router.get("/", verifyToken, async (req, res) => {
 
   } catch (err) {
     console.error("❌ certificates list error:", err);
-    res.status(500).json({ error: "Failed to load certificates" });
+    res.status(500).json({
+      error: "Failed to load certificates"
+    });
   }
 });
 
