@@ -63,28 +63,28 @@ SELECT
   c.issued_at,
   u.name AS student_name,
 
-  /* ✅ ALWAYS GET COURSE NAME */
-  COALESCE(cr.title, ce.title, 'Course') AS course_title,
-
-  /* ✅ ALWAYS GET EXAM NAME */
   CASE
-    WHEN c.type = 'course' THEN 'Final Course Exam'
-    WHEN c.type = 'competitive' THEN ce.title
-    WHEN c.type = 'exam' THEN e.title
+    WHEN c.type='competitive'
+      THEN ce.title
+    ELSE co.title
+  END AS course_title,
+
+  CASE
+    WHEN c.type='competitive'
+      THEN ce.title
+    WHEN c.type='course'
+      THEN 'Final Course Exam'
+    WHEN c.type='exam'
+      THEN e.title
     ELSE 'Assessment'
   END AS exam_title
 
 FROM certificates c
-
-JOIN users u
-ON u.id = c.user_id
-
-LEFT JOIN courses cr ON cr.id = c.course_id
+JOIN users u ON u.id = c.user_id
+LEFT JOIN courses co ON co.id = c.course_id
 LEFT JOIN competitive_exams ce ON ce.id = c.course_id
-LEFT JOIN exams e ON e.id = c.course_id
-
-
-WHERE c.certificate_id = $1
+LEFT JOIN exams e ON e.id = c.exam_id
+WHERE c.certificate_id=$1
 `,
 [req.params.id]
 );
@@ -255,51 +255,35 @@ router.get("/", verifyToken, async (req, res) => {
         c.issued_at,
         c.type,
 
-        /* COURSE TITLE */
         CASE
           WHEN c.type = 'competitive'
             THEN ce.title
           ELSE co.title
         END AS course_name,
 
-        /* EXAM TITLE */
         CASE
-          WHEN c.type = 'course'
-            THEN 'Final Course Exam'
-
           WHEN c.type = 'competitive'
             THEN ce.title
-
+          WHEN c.type = 'course'
+            THEN 'Final Course Exam'
           WHEN c.type = 'exam'
             THEN e.title
-
           ELSE 'Assessment'
         END AS exam_name
 
       FROM certificates c
-
-      LEFT JOIN courses co
-        ON co.id = c.course_id
-
-      LEFT JOIN competitive_exams ce
-        ON ce.id = c.course_id
-
-      LEFT JOIN exams e
-        ON e.id = c.exam_id
+      LEFT JOIN courses co ON co.id = c.course_id
+      LEFT JOIN competitive_exams ce ON ce.id = c.course_id
+      LEFT JOIN exams e ON e.id = c.exam_id
 
       WHERE c.user_id = $1
-      AND c.certificate_id IS NOT NULL
-
       ORDER BY c.issued_at DESC
-    `, [userId]);
+    `,[userId]);
 
     res.json(result.rows);
 
-  } catch (err) {
-    console.error("❌ certificates list error:", err);
-    res.status(500).json({
-      error: "Failed to load certificates"
-    });
+  } catch(err) {
+    res.status(500).json({error:"Failed"});
   }
 });
 
