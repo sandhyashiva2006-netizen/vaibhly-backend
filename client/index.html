@@ -893,9 +893,9 @@ Vaibhly connects learners, instructors and recruiters into one career ecosystem.
 
 <div class="hero-buttons mt-4">
 
-<a href="#" onclick="checkLogin()" class="btn hero-btn primary">
-<span>🚀</span> Explore Courses
-</a>
+<button onclick="checkLogin()" class="btn hero-btn primary">
+  <span>🚀</span> Explore Courses
+</button>
 
 <a href="jobs.html" class="btn hero-btn secondary">
 <span>💼</span> Find Jobs
@@ -1011,7 +1011,7 @@ Vaibhly connects learners, instructors and recruiters into one career ecosystem.
 
 <div class="col-md-4">
 <div class="card card-modern clickable-card"
-onclick="goTo('/login.html')">
+onclick="goTo('login.html')">
 
 <img src="assets/images/learners.jpg" class="img-fluid mb-3">
 
@@ -1026,7 +1026,7 @@ Learn industry skills, pass exams and earn verified certificates.
 
 <div class="col-md-4">
 <div class="card card-modern p-4 text-center clickable-card"
-onclick="goTo('/instructor/instructor-login.html')">
+onclick="goTo('instructor/instructor-login.html')">
 
 <img src="assets/images/instructors.jpg" class="img-fluid mb-3">
 
@@ -1041,7 +1041,7 @@ Create courses and exams. Share knowledge and earn revenue.
 
 <div class="col-md-4">
 <div class="card card-modern p-4 text-center clickable-card"
-onclick="goTo('/recruiter-login.html')">
+onclick="goTo('recruiter-login.html')">
 
 <img src="assets/images/recruiters.jpg" class="img-fluid mb-3">
 
@@ -1345,14 +1345,14 @@ container.innerHTML += `<div class="skeleton-card"></div>`
 
 try{
 
-const res = await fetch("http://localhost:5000/api/store/courses")
+const res = await fetch("https://vaibhly-backend1.onrender.com/api/store/courses")
 const courses = await res.json()
 
 console.log("COURSES:", courses);
 
 container.innerHTML=""
 
-const BASE_URL = "http://localhost:5000";
+const BASE_URL = "https://vaibhly-backend1.onrender.com";
 
 courses.slice(0,10).forEach((course,index)=>{
 
