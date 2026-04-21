@@ -118,10 +118,15 @@ async(req,res)=>{
 
  const result =
  await pool.query(`
- SELECT COALESCE(SUM(amount),0) AS balance
+ SELECT COALESCE(SUM(
+   CASE
+     WHEN LOWER(type)='credit' THEN amount
+     WHEN LOWER(type)='debit' THEN -amount
+     ELSE 0
+   END
+ ),0) AS balance
  FROM instructor_transactions
  WHERE instructor_id=$1
- AND type='credit'
  `,
  [req.user.id]);
 
@@ -192,13 +197,19 @@ async(req,res)=>{
  // ===============================
 
  const wallet = await pool.query(
- `SELECT balance
-  FROM instructor_wallet
-  WHERE instructor_id=$1`,
+ `SELECT COALESCE(SUM(
+  CASE
+    WHEN LOWER(type)='credit' THEN amount
+    WHEN LOWER(type)='debit' THEN -amount
+    ELSE 0
+  END
+),0) AS balance
+FROM instructor_transactions
+WHERE instructor_id=$1`,
  [instructorId]
  );
 
- const balance = wallet.rows[0]?.balance || 0;
+ const balance = Number(wallet.rows[0].balance || 0);
 
  if(amount > balance){
   return res.status(400).json({
