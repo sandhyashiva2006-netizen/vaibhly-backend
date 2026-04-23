@@ -242,50 +242,90 @@ router.post("/admin/login", async (req, res) => {
 
 router.post("/recruiter/register", async (req, res) => {
   try {
-    const { name, email, password, company } = req.body;
 
-    if (!name || !email || !password || !company) {
-      return res.status(400).json({ error: "All fields are required" });
+    const {
+      name,
+      email,
+      username,
+      password,
+      company
+    } = req.body;
+
+    if (!name || !email || !username || !password || !company) {
+      return res.status(400).json({
+        error: "All fields are required"
+      });
     }
 
-    // Check existing user
-    const existing = await pool.query(
-      "SELECT id FROM users WHERE email=$1",
+    /* Email check */
+    const existingEmail = await pool.query(
+      `SELECT id FROM users WHERE email=$1`,
       [email]
     );
 
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ error: "Email already exists" });
+    if (existingEmail.rows.length) {
+      return res.status(400).json({
+        error: "Email already exists"
+      });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    /* Username check */
+    const existingUser = await pool.query(
+      `SELECT id FROM users WHERE username=$1`,
+      [username]
+    );
 
-    // Generate username from email
-    const username = email.split("@")[0];
+    if (existingUser.rows.length) {
+      return res.status(400).json({
+        error: "Username already taken"
+      });
+    }
 
-    // Insert into users
+    const hashedPassword =
+      await bcrypt.hash(password, 10);
+
+const cleanUsername = username.toLowerCase().trim();
+
     const userResult = await pool.query(
-      `INSERT INTO users (name, email, password, role, username)
-       VALUES ($1,$2,$3,$4,$5)
-       RETURNING id`,
-      [name, email, hashedPassword, "recruiter", username]
+      `
+      INSERT INTO users
+      (name,email,password,role,username)
+      VALUES ($1,$2,$3,$4,$5)
+      RETURNING id
+      `,
+      [
+        name,
+        email,
+        hashedPassword,
+        "recruiter",
+        username
+      ]
     );
 
     const userId = userResult.rows[0].id;
 
-    // Insert recruiter profile
     await pool.query(
-      `INSERT INTO recruiter_profiles (user_id, company_name)
-       VALUES ($1,$2)`,
+      `
+      INSERT INTO recruiter_profiles
+      (user_id, company_name, plan_id)
+      VALUES ($1,$2,1)
+      `,
       [userId, company]
     );
 
-    res.json({ success: true });
+    res.status(201).json({
+      success: true
+    });
 
   } catch (err) {
-    console.error("Recruiter registration error:", err);
-    res.status(500).json({ error: "Registration failed" });
+    console.error(
+      "Recruiter registration error:",
+      err
+    );
+
+    res.status(500).json({
+      error: err.message
+    });
   }
 });
 
