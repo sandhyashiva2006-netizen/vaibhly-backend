@@ -105,6 +105,47 @@ router.get("/jobs/:id/applications", verifyToken, async (req, res) => {
 
 });
 
+router.get("/jobs/:id", verifyToken, async (req, res) => {
+  try {
+
+    const jobId = req.params.id;
+
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM jobs
+      WHERE id = $1
+      `,
+      [jobId]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({
+        error: "Job not found"
+      });
+    }
+
+    const job = result.rows[0];
+
+    if (
+      req.user.role !== "admin" &&
+      Number(job.recruiter_id) !== Number(req.user.id)
+    ) {
+      return res.status(403).json({
+        error: "Not your job"
+      });
+    }
+
+    res.json(job);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      error: "Server error"
+    });
+  }
+});
+
 /* ================= SAVE JOB ================= */
 
 router.post("/jobs/:id/save", verifyToken, async (req, res) => {
@@ -316,24 +357,6 @@ router.post("/messages", verifyToken, async (req, res) => {
 
 });
 
-router.post("/applications/:id/schedule", verifyToken, async (req, res) => {
-
-  const { interview_date, meeting_link } = req.body;
-
-  await pool.query(`
-    INSERT INTO interview_schedules
-    (application_id, interview_date, meeting_link)
-    VALUES ($1,$2,$3)
-  `, [req.params.id, interview_date, meeting_link]);
-
-  await pool.query(`
-    UPDATE job_applications
-    SET status = 'interview'
-    WHERE id = $1
-  `, [req.params.id]);
-
-  res.json({ success: true });
-});
 
 router.get("/messages/:jobId/:userId", verifyToken, async (req, res) => {
 
