@@ -517,7 +517,9 @@ router.get("/google/callback",
       { expiresIn: "7d" }
     );
 
-    res.redirect(`http://localhost:5500/google-success.html?token=${token}`);
+    res.redirect(
+`https://vaibhly-frontend.pages.dev/google-success.html?token=${token}`
+);
   }
 );
 
