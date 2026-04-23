@@ -411,29 +411,68 @@ router.post("/verify-otp", async (req, res) => {
   res.json({ success: true });
 });
 
-router.post("/forgot-password", async (req, res) => {
-  const { email } = req.body;
+const nodemailer = require("nodemailer");
 
-  const user = await pool.query("SELECT id FROM users WHERE email=$1", [email]);
+router.post("/forgot-password", async (req,res)=>{
+ try{
 
-  if (!user.rows.length) {
-    return res.status(400).json({ error: "Email not found" });
-  }
+   const { email } = req.body;
 
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+   if(!email){
+     return res.status(400).json({
+       error:"Email required"
+     });
+   }
 
-  await pool.query(
-    "INSERT INTO otp_codes (email, otp, expires_at) VALUES ($1,$2,NOW() + INTERVAL '5 minutes')",
-    [email, otp]
-  );
+   const user = await pool.query(
+     `SELECT id,email FROM users WHERE email=$1`,
+     [email]
+   );
 
-  await sendEmail(
-    email,
-    "Reset Your Password",
-    `Your password reset OTP is: ${otp}`
-  );
+   if(!user.rows.length){
+     return res.status(404).json({
+       error:"Email not found"
+     });
+   }
 
-  res.json({ success: true });
+   const otp =
+     Math.floor(100000 + Math.random()*900000).toString();
+
+   await pool.query(
+     `
+     UPDATE users
+     SET reset_otp=$1,
+         reset_otp_expiry=NOW() + INTERVAL '10 minutes'
+     WHERE email=$2
+     `,
+     [otp,email]
+   );
+
+   const transporter = nodemailer.createTransport({
+     service:"gmail",
+     auth:{
+       user:process.env.EMAIL_USER,
+       pass:process.env.EMAIL_PASS
+     }
+   });
+
+   await transporter.sendMail({
+     from:process.env.EMAIL_USER,
+     to:email,
+     subject:"Vaibhly Password Reset OTP",
+     text:`Your OTP is ${otp}`
+   });
+
+   res.json({
+     success:true
+   });
+
+ }catch(err){
+   console.error(err);
+   res.status(500).json({
+     error:err.message
+   });
+ }
 });
 
 router.post("/reset-password", async (req, res) => {
