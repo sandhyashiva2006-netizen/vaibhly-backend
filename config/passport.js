@@ -1,36 +1,49 @@
 const passport = require("passport");
-const GoogleStrategy = require("passport-google-oauth20").Strategy;
-const pool = require("../config/db");
+const GoogleStrategy =
+require("passport-google-oauth20").Strategy;
 
-passport.use(new GoogleStrategy({
-  clientID: "394853156717-1947i2tce9etqbu7foil6upajrljmrpb.apps.googleusercontent.com",
+const pool = require("./db");
+
+passport.use(
+new GoogleStrategy(
+{
+  clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: "/api/auth/google/callback"
+
+  callbackURL:
+  "https://vaibhly-backend1.onrender.com/api/auth/google/callback"
 },
-async (accessToken, refreshToken, profile, done) => {
+async (accessToken, refreshToken, profile, done)=>{
 
-  const email = profile.emails[0].value;
-  const name = profile.displayName;
+ try{
 
-  let user = await pool.query(
-    "SELECT * FROM users WHERE email=$1",
-    [email]
-  );
+   const email = profile.emails[0].value;
+   const name = profile.displayName;
 
-  if (!user.rows.length) {
+   let user = await pool.query(
+     "SELECT * FROM users WHERE email=$1",
+     [email]
+   );
 
-    const newUser = await pool.query(
-      `INSERT INTO users (name, email, role)
-       VALUES ($1,$2,'student')
-       RETURNING *`,
-      [name, email]
-    );
+   if(!user.rows.length){
 
-    user = newUser;
-  }
+     const created = await pool.query(
+       `INSERT INTO users(name,email,role)
+        VALUES($1,$2,'student')
+        RETURNING *`,
+       [name,email]
+     );
 
-  return done(null, user.rows[0]);
-}
-));
+     user = created;
+   }
+
+   return done(null, user.rows[0]);
+
+ }catch(err){
+   return done(err,null);
+ }
+
+})
+);
 
 module.exports = passport;
