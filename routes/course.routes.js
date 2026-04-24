@@ -142,11 +142,19 @@ res.json({success:true});
 
 }catch(err){
 
+console.error("===== DELETE COURSE REAL ERROR =====");
+console.error("message:", err.message);
+console.error("code:", err.code);
+console.error("table:", err.table);
+console.error("constraint:", err.constraint);
+console.error("detail:", err.detail);
+
 await client.query("ROLLBACK");
-console.error("Delete course error:",err);
 
 res.status(500).json({
-error:"Failed to delete course"
+ error: err.message
+});
+
 });
 
 }finally{
