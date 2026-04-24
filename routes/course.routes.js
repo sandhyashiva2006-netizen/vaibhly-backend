@@ -91,29 +91,49 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
 });
 
 /* ================= DELETE COURSE ================= */
-router.delete("/:id", verifyToken, async (req, res) => {
+router.delete("/:id", verifyToken, isAdminOnly, async (req, res) => {
+  const client = await pool.connect();
+
   try {
     const courseId = req.params.id;
 
-    // Optional safety: prevent deleting if enrolled users exist
-    const enrollCheck = await pool.query(
-      "SELECT COUNT(*) FROM user_courses WHERE course_id = $1",
+    await client.query("BEGIN");
+
+    await client.query(
+      "DELETE FROM user_courses WHERE course_id=$1",
       [courseId]
     );
 
-    if (Number(enrollCheck.rows[0].count) > 0) {
-      return res.status(400).json({
-        error: "Cannot delete course with active enrollments"
-      });
-    }
+    await client.query(
+      "DELETE FROM course_lessons WHERE module_id IN (SELECT id FROM course_modules WHERE course_id=$1)",
+      [courseId]
+    );
 
-    await pool.query("DELETE FROM courses WHERE id = $1", [courseId]);
+    await client.query(
+      "DELETE FROM course_modules WHERE course_id=$1",
+      [courseId]
+    );
 
-    res.json({ success: true });
+    await client.query(
+      "DELETE FROM courses WHERE id=$1",
+      [courseId]
+    );
 
-  } catch (err) {
+    await client.query("COMMIT");
+
+    res.json({ success:true });
+
+  } catch(err){
+
+    await client.query("ROLLBACK");
     console.error("Delete course error:", err);
-    res.status(500).json({ error: "Failed to delete course" });
+
+    res.status(500).json({
+      error:"Failed to delete course"
+    });
+
+  } finally {
+    client.release();
   }
 });
 
