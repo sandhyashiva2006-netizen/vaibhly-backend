@@ -162,7 +162,6 @@ app.use("/api", instructorWithdrawRoutes);
 app.use("/api", instructorCourseRoutes);
 app.use("/api", instructorLessonRoutes);
 app.use("/api", instructorModuleRoutes);
-app.use("/api/exam", examRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/instructor-earnings", instructorEarningsRoutes);
 app.use("/", publicRoutes);
