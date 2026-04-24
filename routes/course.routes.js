@@ -155,8 +155,6 @@ res.status(500).json({
  error: err.message
 });
 
-});
-
 }finally{
 client.release();
 }
