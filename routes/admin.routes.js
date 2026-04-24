@@ -639,24 +639,55 @@ router.delete("/competitive-exams/:id", verifyToken, isAdmin, async (req, res) =
 
 router.post("/competitive-questions", verifyToken, isAdmin, async (req,res)=>{
 
- const {
-  exam_id,
-  question,
-  option_a,
-  option_b,
-  option_c,
-  option_d,
-  correct_option
- } = req.body;
+try{
 
- await pool.query(
-  `INSERT INTO competitive_questions
-  (exam_id,question,option_a,option_b,option_c,option_d,correct_option)
-  VALUES($1,$2,$3,$4,$5,$6,$7)`,
-  [exam_id,question,option_a,option_b,option_c,option_d,correct_option]
- );
+const {
+exam_id,
+question,
+option_a,
+option_b,
+option_c,
+option_d,
+correct_option
+} = req.body;
 
- res.json({success:true});
+/* duplicate check */
+const exists = await pool.query(`
+SELECT id
+FROM competitive_questions
+WHERE exam_id=$1
+AND LOWER(TRIM(question)) = LOWER(TRIM($2))
+LIMIT 1
+`,[exam_id, question]);
+
+if(exists.rows.length){
+ return res.status(400).json({
+   error:"Question already exists for this exam"
+ });
+}
+
+await pool.query(`
+INSERT INTO competitive_questions
+(exam_id,question,option_a,option_b,option_c,option_d,correct_option)
+VALUES($1,$2,$3,$4,$5,$6,$7)
+`,[
+exam_id,
+question,
+option_a,
+option_b,
+option_c,
+option_d,
+correct_option
+]);
+
+res.json({success:true});
+
+}catch(err){
+
+console.error("Add question error:",err);
+res.status(500).json({error:"Add failed"});
+
+}
 
 });
 
@@ -732,6 +763,26 @@ option_c,
 option_d,
 correct_option
 } = req.body;
+
+/* duplicate check excluding current row */
+const exists = await pool.query(`
+SELECT id
+FROM competitive_questions
+WHERE exam_id = (
+  SELECT exam_id
+  FROM competitive_questions
+  WHERE id=$1
+)
+AND LOWER(TRIM(question)) = LOWER(TRIM($2))
+AND id <> $1
+LIMIT 1
+`,[id, question]);
+
+if(exists.rows.length){
+ return res.status(400).json({
+   error:"Same question already exists"
+ });
+}
 
 await pool.query(`
 UPDATE competitive_questions
