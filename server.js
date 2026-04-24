@@ -12,7 +12,7 @@ const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
 require("./cron/subscription.cron");
-app.options("*", cors());
+
 
 /* ================= ROUTES ================= */
 const adminRoutes = require("./routes/admin.routes");
@@ -49,9 +49,7 @@ app.use(cors({
     "https://vaibhly.in",
     "https://www.vaibhly.in",
     "https://vaibhly-frontend.pages.dev",
-    "http://localhost:5500",
-    "http://127.0.0.1:5500",
-    "http://localhost:3000"
+    "http://localhost:5500"
   ],
   methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
   credentials: true
