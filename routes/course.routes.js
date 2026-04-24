@@ -16,7 +16,7 @@ console.log("isAdmin =", isAdmin);
 router.get("/", verifyToken, async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, title, description FROM courses ORDER BY id DESC"
+      "SELECT id, title, description, active FROM courses WHERE active=true ORDER BY id DESC"
     );
     res.json(result.rows);
   } catch (err) {
@@ -161,6 +161,43 @@ res.json({success:true});
 
 });
 
+router.patch("/:id/archive", verifyToken, isAdminOnly, async (req,res)=>{
+ try{
+
+ const courseId = req.params.id;
+
+ await pool.query(
+ "UPDATE courses SET active=false WHERE id=$1",
+ [courseId]
+ );
+
+ res.json({success:true});
+
+ }catch(err){
+  console.error(err);
+  res.status(500).json({error:"Archive failed"});
+ }
+});
+
+router.patch("/:id/restore", verifyToken, isAdminOnly, async (req,res)=>{
+ try{
+
+ const courseId = req.params.id;
+
+ await pool.query(
+ "UPDATE courses SET active=true WHERE id=$1",
+ [courseId]
+ );
+
+ res.json({success:true});
+
+ }catch(err){
+  res.status(500).json({error:"Restore failed"});
+ }
+});
+
+
+
 /* ================= UPDATE COURSE VISIBILITY ================= */
 router.patch("/:id/visibility", verifyToken, async (req, res) => {
   try {
@@ -188,6 +225,25 @@ router.patch("/:id/visibility", verifyToken, async (req, res) => {
     console.error("Visibility update error:", err);
     res.status(500).json({ error: "Failed to update visibility" });
   }
+});
+
+router.get("/public/list", async (req,res)=>{
+ try{
+
+ const result = await pool.query(
+ `
+ SELECT id,title,description
+ FROM courses
+ WHERE active=true
+ ORDER BY id DESC
+ `
+ );
+
+ res.json(result.rows);
+
+ }catch(err){
+  res.status(500).json({error:"Failed to load courses"});
+ }
 });
 
 module.exports = router;
