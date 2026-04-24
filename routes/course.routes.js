@@ -94,69 +94,60 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
 /* ================= DELETE COURSE ================= */
 router.delete("/:id", verifyToken, isAdminOnly, async (req,res)=>{
 
-const client = await pool.connect();
-
 try{
 
 const courseId = req.params.id;
 
-await client.query("BEGIN");
-
-/* delete lessons first */
-await client.query(`
+/* 1 */
+console.log("Deleting lessons...");
+await pool.query(`
 DELETE FROM course_lessons
 WHERE module_id IN (
-  SELECT id
-  FROM course_modules
-  WHERE course_id=$1
+ SELECT id FROM course_modules WHERE course_id=$1
 )
-`, [courseId]);
+`,[courseId]);
 
-/* delete modules */
-await client.query(
+/* 2 */
+console.log("Deleting modules...");
+await pool.query(
 "DELETE FROM course_modules WHERE course_id=$1",
 [courseId]
 );
 
-/* delete enrollments */
-await client.query(
+/* 3 */
+console.log("Deleting enrollments...");
+await pool.query(
 "DELETE FROM user_courses WHERE course_id=$1",
 [courseId]
 );
 
-/* delete exams if linked */
-await client.query(
+/* 4 */
+console.log("Deleting exams...");
+await pool.query(
 "DELETE FROM exams WHERE course_id=$1",
-[courseId]
-).catch(()=>{});
-
-/* finally delete course */
-await client.query(
-"DELETE FROM courses WHERE id=$1",
 [courseId]
 );
 
-await client.query("COMMIT");
+/* 5 */
+console.log("Deleting course...");
+await pool.query(
+"DELETE FROM courses WHERE id=$1",
+[courseId]
+);
 
 res.json({success:true});
 
 }catch(err){
 
-console.error("===== DELETE COURSE REAL ERROR =====");
-console.error("message:", err.message);
-console.error("code:", err.code);
+console.error("DELETE FAILED:");
+console.error(err.message);
 console.error("table:", err.table);
 console.error("constraint:", err.constraint);
-console.error("detail:", err.detail);
-
-await client.query("ROLLBACK");
 
 res.status(500).json({
- error: err.message
+error: err.message
 });
 
-}finally{
-client.release();
 }
 
 });
