@@ -718,6 +718,73 @@ await pool.query(
 
 });
 
+router.put("/competitive-questions/:id", verifyToken, isAdmin, async (req,res)=>{
+
+try{
+
+const { id } = req.params;
+
+const {
+question,
+option_a,
+option_b,
+option_c,
+option_d,
+correct_option
+} = req.body;
+
+await pool.query(`
+UPDATE competitive_questions
+SET question=$1,
+option_a=$2,
+option_b=$3,
+option_c=$4,
+option_d=$5,
+correct_option=$6
+WHERE id=$7
+`,[
+question,
+option_a,
+option_b,
+option_c,
+option_d,
+correct_option,
+id
+]);
+
+res.json({success:true});
+
+}catch(err){
+
+console.error("Update question error:",err);
+res.status(500).json({error:"Update failed"});
+
+}
+
+});
+
+router.delete("/competitive-questions/:id", verifyToken, isAdmin, async (req,res)=>{
+
+try{
+
+const { id } = req.params;
+
+await pool.query(
+"DELETE FROM competitive_questions WHERE id=$1",
+[id]
+);
+
+res.json({success:true});
+
+}catch(err){
+
+console.error("Delete question error:",err);
+res.status(500).json({error:"Delete failed"});
+
+}
+
+});
+
 router.post("/admin/approve-withdraw", async (req,res)=>{
 
   const { request_id } = req.body;
