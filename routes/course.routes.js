@@ -92,50 +92,65 @@ router.post("/", verifyToken, isAdmin, async (req, res) => {
 });
 
 /* ================= DELETE COURSE ================= */
-router.delete("/:id", verifyToken, isAdminOnly, async (req, res) => {
-  const client = await pool.connect();
+router.delete("/:id", verifyToken, isAdminOnly, async (req,res)=>{
 
-  try {
-    const courseId = req.params.id;
+const client = await pool.connect();
 
-    await client.query("BEGIN");
+try{
 
-    await client.query(
-      "DELETE FROM user_courses WHERE course_id=$1",
-      [courseId]
-    );
+const courseId = req.params.id;
 
-    await client.query(
-      "DELETE FROM course_lessons WHERE module_id IN (SELECT id FROM course_modules WHERE course_id=$1)",
-      [courseId]
-    );
+await client.query("BEGIN");
 
-    await client.query(
-      "DELETE FROM course_modules WHERE course_id=$1",
-      [courseId]
-    );
+/* enrollments */
+await client.query(
+"DELETE FROM user_courses WHERE course_id=$1",[courseId]
+);
 
-    await client.query(
-      "DELETE FROM courses WHERE id=$1",
-      [courseId]
-    );
+/* progress */
+await client.query(
+"DELETE FROM learning_progress WHERE course_id=$1",[courseId]
+).catch(()=>{});
 
-    await client.query("COMMIT");
+/* exams */
+await client.query(
+"DELETE FROM exams WHERE course_id=$1",[courseId]
+).catch(()=>{});
 
-    res.json({ success:true });
+/* lessons first */
+await client.query(`
+DELETE FROM course_lessons
+WHERE module_id IN (
+ SELECT id FROM course_modules WHERE course_id=$1
+)
+`,[courseId]).catch(()=>{});
 
-  } catch(err){
+/* modules */
+await client.query(
+"DELETE FROM course_modules WHERE course_id=$1",
+[courseId]
+);
 
-    await client.query("ROLLBACK");
-    console.error("Delete course error:", err);
+/* finally course */
+await client.query(
+"DELETE FROM courses WHERE id=$1",
+[courseId]
+);
 
-    res.status(500).json({
-      error:"Failed to delete course"
-    });
+await client.query("COMMIT");
 
-  } finally {
-    client.release();
-  }
+res.json({success:true});
+
+}catch(err){
+
+await client.query("ROLLBACK");
+console.error(err);
+res.status(500).json({error:"Failed to delete course"});
+
+}finally{
+client.release();
+}
+
 });
 
 /* ================= UPDATE COURSE VISIBILITY ================= */
