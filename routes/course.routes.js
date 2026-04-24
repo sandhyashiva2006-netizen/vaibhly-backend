@@ -118,7 +118,7 @@ await pool.query(
 [courseId]
 );
 
-/* certificates linked to course exams */
+/* certificates */
 await pool.query(`
 DELETE FROM certificates
 WHERE exam_id IN (
@@ -126,7 +126,7 @@ WHERE exam_id IN (
 )
 `,[courseId]);
 
-/* exam results if used */
+/* results */
 await pool.query(`
 DELETE FROM exam_results
 WHERE exam_id IN (
@@ -140,7 +140,13 @@ await pool.query(
 [courseId]
 );
 
-/* course */
+/* NEW FIX */
+await pool.query(
+"DELETE FROM order_items WHERE course_id=$1",
+[courseId]
+);
+
+/* finally course */
 await pool.query(
 "DELETE FROM courses WHERE id=$1",
 [courseId]
@@ -149,12 +155,8 @@ await pool.query(
 res.json({success:true});
 
 }catch(err){
-
-console.error(err);
-res.status(500).json({
-error: err.message
-});
-
+ console.error(err);
+ res.status(500).json({error:err.message});
 }
 
 });
