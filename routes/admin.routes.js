@@ -343,12 +343,41 @@ router.put("/exams/:id/toggle", verifyToken, isAdmin, async (req, res) => {
   res.json({ success: true });
 });
 
-router.delete("/exams/:id", verifyToken, isAdmin, async (req, res) => {
-  const { id } = req.params;
+router.delete("/exams/:id", verifyToken, isAdmin, async (req,res)=>{
+ try{
 
-  await pool.query("DELETE FROM exams WHERE id = $1", [id]);
+   const { id } = req.params;
 
-  res.json({ success: true });
+   await pool.query("BEGIN");
+
+   await pool.query(
+     "DELETE FROM questions WHERE exam_id=$1",
+     [id]
+   );
+
+   await pool.query(
+     "DELETE FROM exam_results WHERE exam_id=$1",
+     [id]
+   );
+
+   await pool.query(
+     "DELETE FROM exams WHERE id=$1",
+     [id]
+   );
+
+   await pool.query("COMMIT");
+
+   res.json({success:true});
+
+ }catch(err){
+
+   await pool.query("ROLLBACK");
+   console.error("Delete exam error:",err);
+
+   res.status(500).json({
+     error:"Delete failed"
+   });
+ }
 });
 
 /* ================= CREATE EXAM ================= */
