@@ -5,6 +5,7 @@ const pool = require("../config/db");
 
 // ✅ CORRECT & ONLY middleware import
 const { verifyToken, isAdmin } = require("../middleware/auth.middleware");
+const { isAdminOnly } = require("../middleware/role.middleware");
 
 console.log("verifyToken =", verifyToken);
 console.log("isAdmin =", isAdmin);
