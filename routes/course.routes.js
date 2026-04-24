@@ -102,36 +102,35 @@ const courseId = req.params.id;
 
 await client.query("BEGIN");
 
-/* enrollments */
-await client.query(
-"DELETE FROM user_courses WHERE course_id=$1",[courseId]
-);
-
-/* progress */
-await client.query(
-"DELETE FROM learning_progress WHERE course_id=$1",[courseId]
-).catch(()=>{});
-
-/* exams */
-await client.query(
-"DELETE FROM exams WHERE course_id=$1",[courseId]
-).catch(()=>{});
-
-/* lessons first */
+/* delete lessons first */
 await client.query(`
 DELETE FROM course_lessons
 WHERE module_id IN (
- SELECT id FROM course_modules WHERE course_id=$1
+  SELECT id
+  FROM course_modules
+  WHERE course_id=$1
 )
-`,[courseId]).catch(()=>{});
+`, [courseId]);
 
-/* modules */
+/* delete modules */
 await client.query(
 "DELETE FROM course_modules WHERE course_id=$1",
 [courseId]
 );
 
-/* finally course */
+/* delete enrollments */
+await client.query(
+"DELETE FROM user_courses WHERE course_id=$1",
+[courseId]
+);
+
+/* delete exams if linked */
+await client.query(
+"DELETE FROM exams WHERE course_id=$1",
+[courseId]
+).catch(()=>{});
+
+/* finally delete course */
 await client.query(
 "DELETE FROM courses WHERE id=$1",
 [courseId]
@@ -144,8 +143,11 @@ res.json({success:true});
 }catch(err){
 
 await client.query("ROLLBACK");
-console.error(err);
-res.status(500).json({error:"Failed to delete course"});
+console.error("Delete course error:",err);
+
+res.status(500).json({
+error:"Failed to delete course"
+});
 
 }finally{
 client.release();
