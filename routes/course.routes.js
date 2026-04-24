@@ -98,8 +98,7 @@ try{
 
 const courseId = req.params.id;
 
-/* 1 */
-console.log("Deleting lessons...");
+/* lessons */
 await pool.query(`
 DELETE FROM course_lessons
 WHERE module_id IN (
@@ -107,29 +106,41 @@ WHERE module_id IN (
 )
 `,[courseId]);
 
-/* 2 */
-console.log("Deleting modules...");
+/* modules */
 await pool.query(
 "DELETE FROM course_modules WHERE course_id=$1",
 [courseId]
 );
 
-/* 3 */
-console.log("Deleting enrollments...");
+/* enrollments */
 await pool.query(
 "DELETE FROM user_courses WHERE course_id=$1",
 [courseId]
 );
 
-/* 4 */
-console.log("Deleting exams...");
+/* certificates linked to course exams */
+await pool.query(`
+DELETE FROM certificates
+WHERE exam_id IN (
+ SELECT id FROM exams WHERE course_id=$1
+)
+`,[courseId]);
+
+/* exam results if used */
+await pool.query(`
+DELETE FROM exam_results
+WHERE exam_id IN (
+ SELECT id FROM exams WHERE course_id=$1
+)
+`,[courseId]);
+
+/* exams */
 await pool.query(
 "DELETE FROM exams WHERE course_id=$1",
 [courseId]
 );
 
-/* 5 */
-console.log("Deleting course...");
+/* course */
 await pool.query(
 "DELETE FROM courses WHERE id=$1",
 [courseId]
@@ -139,11 +150,7 @@ res.json({success:true});
 
 }catch(err){
 
-console.error("DELETE FAILED:");
-console.error(err.message);
-console.error("table:", err.table);
-console.error("constraint:", err.constraint);
-
+console.error(err);
 res.status(500).json({
 error: err.message
 });
