@@ -730,24 +730,7 @@ res.json({success:true});
 
 });
 
-router.get("/admin/withdraw-requests", async (req,res)=>{
 
-  const result = await db.query(`
-      SELECT w.*, u.name
-      FROM withdraw_requests w
-      JOIN users u ON u.id = w.instructor_id
-      ORDER BY w.request_date DESC
-  `);
-
-await pool.query(
-`INSERT INTO admin_notifications(message)
- VALUES($1)`,
-[`Instructor ${instructorId} requested ₹${amount} withdrawal`]
-);
-
-  res.json(result.rows);
-
-});
 
 router.put("/competitive-questions/:id", verifyToken, isAdmin, async (req,res)=>{
 
@@ -836,38 +819,9 @@ res.status(500).json({error:"Delete failed"});
 
 });
 
-router.post("/admin/approve-withdraw", async (req,res)=>{
 
-  const { request_id } = req.body;
 
-  await db.query(
-    `UPDATE withdraw_requests
-     SET status='approved',
-         processed_date=NOW()
-     WHERE id=$1`,
-    [request_id]
-  );
-
-  res.json({success:true});
-
-});
-
-router.post("/admin/mark-paid", async (req,res)=>{
-
-  const { request_id } = req.body;
-
-  await db.query(
-    `UPDATE withdraw_requests
-     SET status='paid'
-     WHERE id=$1`,
-    [request_id]
-  );
-
-  res.json({success:true});
-
-});
-
-router.get("/admin/withdraw-requests", verifyToken, async(req,res)=>{
+router.get("/withdraw-requests", verifyToken, async(req,res)=>{
 
  try{
 
@@ -905,7 +859,7 @@ router.get("/admin/withdraw-requests", verifyToken, async(req,res)=>{
 
 });
 
-router.post("/admin/approve-withdraw", verifyToken, async(req,res)=>{
+router.post("/approve-withdraw", verifyToken, async(req,res)=>{
 
  try{
 
@@ -928,7 +882,7 @@ router.post("/admin/approve-withdraw", verifyToken, async(req,res)=>{
 
 });
 
-router.post("/admin/mark-paid", verifyToken, async(req,res)=>{
+router.post("/mark-paid", verifyToken, async(req,res)=>{
 
  try{
 
@@ -951,7 +905,7 @@ router.post("/admin/mark-paid", verifyToken, async(req,res)=>{
 
 });
 
-router.get("/admin/notifications",
+router.get("/notifications",
 verifyToken,
 async(req,res)=>{
 
