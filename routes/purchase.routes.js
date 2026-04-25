@@ -179,7 +179,7 @@ router.post("/verify", verifyToken, async (req, res) => {
   });
 }
 
-const orderInfo = await pool.query(
+const purchaseInfo = await pool.query(
   `
   SELECT purchase_type, course_id, theme_code
   FROM orders
@@ -188,13 +188,13 @@ const orderInfo = await pool.query(
   [dbOrderId]
 );
 
-if (!orderInfo.rows.length) {
+if (!purchaseInfo.rows.length) {
   return res.status(404).json({
     error: "Order not found"
   });
 }
 
-const order = orderInfo.rows[0];
+const order = purchaseInfo.rows[0];
 
     /* ================= VERIFY SIGNATURE ================= */
     const body = razorpay_order_id + "|" + razorpay_payment_id;
