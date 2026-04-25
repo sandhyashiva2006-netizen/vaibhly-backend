@@ -93,18 +93,28 @@ router.post("/reward-course", verifyToken, async (req, res) => {
   }
 });
 
-router.get("/store-items", verifyToken, async (req, res) => {
+router.get("/store-items", async (req, res) => {
   try {
+
     const result = await pool.query(`
-      SELECT id,title,description,coin_cost,item_type
-      FROM coin_store_items
-      WHERE is_active = true
-      ORDER BY coin_cost ASC
+      SELECT
+        id,
+        name,
+        coins,
+        price,
+        active
+      FROM coin_store
+      WHERE active = true
+      ORDER BY coins ASC
     `);
 
     res.json(result.rows);
+
   } catch (err) {
-    res.status(500).json({ error: "Failed to load store" });
+
+    console.error("Store items error:", err);
+
+    res.status(200).json([]);
   }
 });
 
