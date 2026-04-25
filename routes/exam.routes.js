@@ -7,30 +7,37 @@ const EXAM_UNLOCK_COST = 200; // same for all exams
 
 router.post("/unlock", verifyToken, async (req, res) => {
   try {
+
     const userId = req.user.id;
     const { exam_id } = req.body;
 
-    if (!exam_id) {
-      return res.status(400).json({ error: "Exam ID required" });
-    }
-
     const exam = await pool.query(
-      "SELECT id, title, unlock_cost, price FROM exams WHERE id = $1",
+      "SELECT id, title, price FROM competitive_exams WHERE id = $1 AND active = true",
       [exam_id]
     );
 
     if (!exam.rows.length) {
-      return res.status(404).json({ error: "Exam not found" });
+      return res.status(404).json({
+        error: "Exam not found"
+      });
     }
 
-    return res.json({
-      success: true,
-      exam: exam.rows[0]
+    await pool.query(
+      `INSERT INTO user_exam_unlocks (user_id, exam_id)
+       VALUES ($1,$2)
+       ON CONFLICT DO NOTHING`,
+      [userId, exam_id]
+    );
+
+    res.json({
+      success: true
     });
 
   } catch (err) {
-    console.error("unlock error", err);
-    res.status(500).json({ error: "Unlock failed" });
+    console.error(err);
+    res.status(500).json({
+      error: "Unlock failed"
+    });
   }
 });
 
