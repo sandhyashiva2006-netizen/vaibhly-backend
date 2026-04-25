@@ -102,17 +102,39 @@ router.get("/:examId/questions", verifyToken, async (req, res) => {
       });
     }
 
-    const examRes = await pool.query(
-      `SELECT course_id, type FROM exams WHERE id = $1`,
-      [examId]
-    );
+    let examRes = await pool.query(
+`SELECT course_id, type
+ FROM exams
+ WHERE id = $1`,
+[examId]
+);
 
-    if (!examRes.rows.length) {
-      return res.status(404).json({
-        success: false,
-        error: "Exam not found"
-      });
-    }
+let examType = "course";
+let courseId = null;
+
+if (examRes.rows.length) {
+
+  courseId = examRes.rows[0].course_id;
+  examType = examRes.rows[0].type || "course";
+
+} else {
+
+  const compRes = await pool.query(
+    `SELECT id
+     FROM competitive_exams
+     WHERE id = $1 AND active = true`,
+    [examId]
+  );
+
+  if (!compRes.rows.length) {
+    return res.status(404).json({
+      success:false,
+      error:"Exam not found"
+    });
+  }
+
+  examType = "competitive";
+}
 
     const courseId = examRes.rows[0].course_id;
     const examType = examRes.rows[0].type;
@@ -320,13 +342,45 @@ router.post("/submit", verifyToken, async (req, res) => {
 /* ================= VALIDATE USER COURSE ACCESS ================= */
 
 
-const examInfo = await pool.query(
-  `SELECT course_id, type FROM exams WHERE id = $1`,
+let examInfo = await pool.query(
+  `
+  SELECT course_id, type
+  FROM exams
+  WHERE id = $1
+  `,
   [exam_id]
 );
 
-const courseId = examInfo.rows[0]?.course_id;
-const examType = examInfo.rows[0]?.type;
+let courseId = null;
+let examType = "course";
+
+/* Normal course exam found */
+if (examInfo.rows.length) {
+
+  courseId = examInfo.rows[0].course_id;
+  examType = examInfo.rows[0].type || "course";
+
+} else {
+
+  /* Try competitive exam */
+  const compRes = await pool.query(
+    `
+    SELECT id
+    FROM competitive_exams
+    WHERE id = $1 AND active = true
+    `,
+    [exam_id]
+  );
+
+  if (!compRes.rows.length) {
+    return res.status(404).json({
+      success:false,
+      error:"Exam not found"
+    });
+  }
+
+  examType = "competitive";
+}
 
 if (examType === "course") {
 
