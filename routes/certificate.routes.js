@@ -52,44 +52,61 @@ AND c.certificate_id IS NOT NULL
 
 /* ================= VERIFY CERTIFICATE ================= */
 router.get("/verify/:id", async (req, res) => {
-console.log("VERIFY CERTIFICATE:", req.params.id);
+
+  console.log("VERIFY CERTIFICATE:", req.params.id);
+
   try {
 
-    const result = await pool.query(
-`
-SELECT
-  c.certificate_id,
-  c.type,
-  c.issued_at,
-  u.name AS student_name,
+    const result = await pool.query(`
+      SELECT
+        c.certificate_id,
+        c.type,
+        c.issued_at,
+        c.score,
+        c.total_questions,
 
-  CASE
-    WHEN c.type='competitive'
-      THEN ce.title
-    ELSE co.title
-  END AS course_title,
+        u.name AS student_name,
 
-  CASE
-    WHEN c.type='competitive'
-      THEN ce.title
-    WHEN c.type='course'
-      THEN 'Final Course Exam'
-    WHEN c.type='exam'
-      THEN e.title
-    ELSE 'Assessment'
-  END AS exam_title
+        /* Main Title */
+        CASE
+          WHEN c.type = 'competitive'
+            THEN ce.title
 
-FROM certificates c
-JOIN users u ON u.id = c.user_id
-LEFT JOIN courses co ON co.id = c.course_id
-LEFT JOIN competitive_exams ce ON ce.id = c.course_id
-LEFT JOIN exams e ON e.id = c.exam_id
-WHERE c.certificate_id=$1
-`,
-[req.params.id]
-);
+          WHEN c.type = 'course'
+            THEN co.title
+
+          WHEN c.type = 'exam'
+            THEN e.title
+
+          ELSE 'Assessment'
+        END AS certificate_title,
+
+        /* Optional separate fields */
+        co.title AS course_title,
+        ce.title AS competitive_exam_title,
+        e.title AS exam_title
+
+      FROM certificates c
+
+      JOIN users u
+        ON u.id = c.user_id
+
+      LEFT JOIN courses co
+        ON co.id = c.course_id
+
+      LEFT JOIN competitive_exams ce
+        ON ce.id = c.exam_id
+
+      LEFT JOIN exams e
+        ON e.id = c.exam_id
+
+      WHERE c.certificate_id = $1
+
+      LIMIT 1
+    `, [req.params.id]);
 
     if (!result.rows.length) {
+
       return res.status(404).json({
         valid: false,
         message: "Certificate not found"
@@ -109,7 +126,6 @@ WHERE c.certificate_id=$1
       valid: false,
       message: "Server error"
     });
-
   }
 });
 
