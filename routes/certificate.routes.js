@@ -53,48 +53,23 @@ AND c.certificate_id IS NOT NULL
 /* ================= VERIFY CERTIFICATE ================= */
 router.get("/verify/:id", async (req, res) => {
 
-  console.log("VERIFY CERTIFICATE:", req.params.id);
-
   try {
 
     const result = await pool.query(`
       SELECT
         c.certificate_id,
         c.type,
+        c.issued_on,
         c.issued_at,
+        c.certificate_title,
+        c.course_name,
 
-        u.name AS student_name,
-
-        CASE
-          WHEN c.type = 'competitive'
-            THEN ce.title
-
-          WHEN c.type = 'course'
-            THEN co.title
-
-          WHEN c.type = 'exam'
-            THEN e.title
-
-          ELSE 'Assessment'
-        END AS certificate_title,
-
-        co.title AS course_title,
-        ce.title AS competitive_exam_title,
-        e.title AS exam_title
+        u.name AS student_name
 
       FROM certificates c
 
       JOIN users u
         ON u.id = c.user_id
-
-      LEFT JOIN courses co
-        ON co.id = c.course_id
-
-      LEFT JOIN competitive_exams ce
-        ON ce.id = c.exam_id
-
-      LEFT JOIN exams e
-        ON e.id = c.exam_id
 
       WHERE c.certificate_id = $1
       LIMIT 1
@@ -102,23 +77,23 @@ router.get("/verify/:id", async (req, res) => {
 
     if (!result.rows.length) {
       return res.status(404).json({
-        valid:false,
-        message:"Certificate not found"
+        valid: false,
+        message: "Certificate not found"
       });
     }
 
     res.json({
-      valid:true,
+      valid: true,
       certificate: result.rows[0]
     });
 
   } catch (err) {
 
-    console.error("Certificate verify error:", err);
+    console.error("Verify error:", err);
 
     res.status(500).json({
-      valid:false,
-      message:"Server error"
+      valid: false,
+      message: "Server error"
     });
   }
 });
