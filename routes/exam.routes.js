@@ -94,12 +94,13 @@ router.post("/unlock", verifyToken, async (req, res) => {
 router.get("/:examId/questions", verifyToken, async (req, res) => {
   try {
 
+    const userId = req.user.id;
     const examId = Number(req.params.examId);
 
     if (!examId) {
       return res.status(400).json({
-        success: false,
-        error: "Invalid exam ID"
+        success:false,
+        error:"Invalid exam ID"
       });
     }
 
@@ -117,7 +118,7 @@ router.get("/:examId/questions", verifyToken, async (req, res) => {
     let courseId = null;
     let examType = "course";
 
-    if (examRes.rows.length > 0) {
+    if (examRes.rows.length) {
 
       courseId = examRes.rows[0].course_id;
       examType = examRes.rows[0].type || "course";
@@ -135,12 +136,50 @@ router.get("/:examId/questions", verifyToken, async (req, res) => {
 
       if (!compRes.rows.length) {
         return res.status(404).json({
-          success: false,
-          error: "Exam not found"
+          success:false,
+          error:"Exam not found"
         });
       }
 
       examType = "competitive";
+    }
+
+    /* =====================================================
+       COMPETITIVE EXAM TOKEN CHECK
+    ===================================================== */
+
+    if (examType === "competitive") {
+
+      const tokenCheck = await pool.query(
+        `
+        SELECT attempts
+        FROM user_exam_tokens
+        WHERE user_id = $1
+        AND exam_id = $2
+        `,
+        [userId, examId]
+      );
+
+      if (
+        !tokenCheck.rows.length ||
+        Number(tokenCheck.rows[0].attempts) <= 0
+      ) {
+        return res.status(403).json({
+          success:false,
+          error:"No attempts available. Purchase again."
+        });
+      }
+
+      /* consume one attempt immediately */
+      await pool.query(
+        `
+        UPDATE user_exam_tokens
+        SET attempts = attempts - 1
+        WHERE user_id = $1
+        AND exam_id = $2
+        `,
+        [userId, examId]
+      );
     }
 
     /* ================= LOAD QUESTIONS ================= */
@@ -177,13 +216,6 @@ router.get("/:examId/questions", verifyToken, async (req, res) => {
       );
     }
 
-    if (!result.rows.length) {
-      return res.json({
-        success: true,
-        questions: []
-      });
-    }
-
     const questions = result.rows.map(q => ({
       id: q.id,
       question: q.question,
@@ -196,17 +228,17 @@ router.get("/:examId/questions", verifyToken, async (req, res) => {
     }));
 
     return res.json({
-      success: true,
+      success:true,
       questions
     });
 
-  } catch (err) {
+  } catch(err) {
 
-    console.error("❌ Questions error:", err);
+    console.error(err);
 
     return res.status(500).json({
-      success: false,
-      error: "Failed to load questions"
+      success:false,
+      error:"Failed to load questions"
     });
   }
 });
@@ -469,12 +501,12 @@ router.post("/submit", verifyToken, async (req, res) => {
       [userId, exam_id]
     );
 
-    if (alreadyPassed.rows.length) {
-      return res.status(400).json({
-        success: false,
-        error: "You already passed this exam"
-      });
-    }
+    if (examType === "course" && alreadyPassed.rows.length > 0) {
+ return res.status(400).json({
+   success:false,
+   error:"You already passed this course exam"
+ });
+}
 
     if (attempts >= MAX_ATTEMPTS) {
       return res.status(403).json({
@@ -491,6 +523,36 @@ router.post("/submit", verifyToken, async (req, res) => {
         error: "No answers submitted"
       });
     }
+
+if (examType === "course" && attempts >= 1) {
+
+  const wallet = await pool.query(
+    `
+    SELECT coins
+    FROM user_wallets
+    WHERE user_id = $1
+    `,
+    [userId]
+  );
+
+  const coins = wallet.rows[0]?.coins || 0;
+
+  if (coins < 20) {
+    return res.status(403).json({
+      success:false,
+      error:"Need 20 coins for reattempt"
+    });
+  }
+
+  await pool.query(
+    `
+    UPDATE user_wallets
+    SET coins = coins - 20
+    WHERE user_id = $1
+    `,
+    [userId]
+  );
+}
 
     /* ================= CALCULATE SCORE ================= */
 
@@ -658,6 +720,7 @@ VALUES ($1,$2,$3,$4,$5,NOW())
     });
   }
 });
+
 
 /* ================= CREATE EXAM ================= */
 router.post("/", verifyToken, isAdmin, async (req, res) => {
@@ -847,16 +910,19 @@ router.post("/confirm-payment", verifyToken, async (req, res) => {
     ========================================== */
 
     await pool.query(
-      `
-      INSERT INTO user_exam_unlocks
-      (user_id, exam_id)
+`
+INSERT INTO user_exam_tokens
+(user_id, exam_id, attempts)
 
-      VALUES ($1, $2)
+VALUES ($1,$2,1)
 
-      ON CONFLICT DO NOTHING
-      `,
-      [userId, exam_id]
-    );
+ON CONFLICT (user_id, exam_id)
+
+DO UPDATE SET attempts =
+user_exam_tokens.attempts + 1
+`,
+[userId, exam_id]
+);
 
     /* ==========================================
        OPTIONAL ORDER HISTORY TABLE
@@ -1073,6 +1139,26 @@ router.patch("/:id/toggle", verifyToken, isAdmin, async (req, res) => {
     console.error("❌ Toggle exam error:", err);
     res.status(500).json({ error: "Failed to toggle exam" });
   }
+});
+
+router.get("/tokens/:examId", verifyToken, async (req,res)=>{
+
+const userId = req.user.id;
+const examId = req.params.examId;
+
+const result = await pool.query(
+`
+SELECT attempts
+FROM user_exam_tokens
+WHERE user_id=$1 AND exam_id=$2
+`,
+[userId, examId]
+);
+
+res.json({
+attempts: result.rows[0]?.attempts || 0
+});
+
 });
 
 module.exports = router;
