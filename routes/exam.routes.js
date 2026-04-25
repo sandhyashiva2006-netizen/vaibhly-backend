@@ -626,9 +626,10 @@ INSERT INTO certificates
  course_id,
  certificate_id,
  type,
+ certificate_title,
  issued_at
 )
-VALUES ($1,$2,$3,$4,$5,NOW())
+VALUES ($1,$2,$3,$4,$5,$6,NOW())
 `,
 [
  userId,
@@ -638,14 +639,18 @@ VALUES ($1,$2,$3,$4,$5,NOW())
    : exam_id,
 
  examType === "competitive"
-   ? exam_id
+   ? null
    : courseId,
 
  certificateId,
 
  examType === "competitive"
    ? "competitive"
-   : "course"
+   : "course",
+
+ examType === "competitive"
+   ? "Competitive Exam"
+   : null
 ]
 );
       }
