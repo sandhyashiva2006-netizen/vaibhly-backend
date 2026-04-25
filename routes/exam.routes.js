@@ -11,26 +11,71 @@ router.post("/unlock", verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { exam_id } = req.body;
 
-    const exam = await pool.query(
-      "SELECT id, title, price FROM competitive_exams WHERE id = $1 AND active = true",
+    const COINS_PER_RUPEE = 10;
+
+    const examRes = await pool.query(
+      `SELECT id,title,price
+       FROM competitive_exams
+       WHERE id=$1 AND active=true`,
       [exam_id]
     );
 
-    if (!exam.rows.length) {
+    if (!examRes.rows.length) {
       return res.status(404).json({
         error: "Exam not found"
       });
     }
 
-    await pool.query(
-      `INSERT INTO user_exam_unlocks (user_id, exam_id)
-       VALUES ($1,$2)
-       ON CONFLICT DO NOTHING`,
-      [userId, exam_id]
+    const exam = examRes.rows[0];
+    const price = Number(exam.price);
+
+    const walletRes = await pool.query(
+      `SELECT coins
+       FROM user_wallets
+       WHERE user_id=$1`,
+      [userId]
     );
 
-    res.json({
-      success: true
+    const coins = walletRes.rows[0]?.coins || 0;
+
+    const rupeeDiscount = Math.floor(coins / COINS_PER_RUPEE);
+
+    let payable = price - rupeeDiscount;
+
+    if (payable < 0) payable = 0;
+
+    if (payable === 0) {
+
+      const coinsUsed = price * COINS_PER_RUPEE;
+
+      await pool.query(
+        `UPDATE user_wallets
+         SET coins = coins - $1
+         WHERE user_id=$2`,
+        [coinsUsed, userId]
+      );
+
+      await pool.query(
+        `INSERT INTO user_exam_unlocks(user_id,exam_id)
+         VALUES($1,$2)
+         ON CONFLICT DO NOTHING`,
+        [userId, exam_id]
+      );
+
+      return res.json({
+        success: true,
+        directUnlock: true
+      });
+    }
+
+    return res.json({
+      success: true,
+      directUnlock: false,
+      exam_id,
+      price,
+      coins,
+      discount: rupeeDiscount,
+      payable
     });
 
   } catch (err) {
@@ -532,24 +577,51 @@ router.get("/", verifyToken, async (req, res) => {
 });
 
 
-router.post("/confirm-payment", verifyToken, async (req, res) => {
-  try {
-    const { exam_id } = req.body;
-    const userId = req.user.id;
+router.post("/confirm-payment", verifyToken, async (req,res)=>{
 
-    await pool.query(
-      `INSERT INTO user_exam_unlocks (user_id, exam_id)
-       VALUES ($1,$2)
-       ON CONFLICT DO NOTHING`,
-      [userId, exam_id]
-    );
+try{
 
-    res.json({ success: true });
+const userId = req.user.id;
+const { exam_id } = req.body;
 
-  } catch (err) {
-    console.error("Exam payment confirm error:", err);
-    res.status(500).json({ error: "Payment confirm failed" });
-  }
+const COINS_PER_RUPEE = 10;
+
+const examRes = await pool.query(
+`SELECT price FROM competitive_exams WHERE id=$1`,
+[exam_id]
+);
+
+const price = Number(examRes.rows[0].price);
+
+const walletRes = await pool.query(
+`SELECT coins FROM user_wallets WHERE user_id=$1`,
+[userId]
+);
+
+const coins = walletRes.rows[0]?.coins || 0;
+
+const maxCoinsUsed = Math.min(coins, price * COINS_PER_RUPEE);
+
+await pool.query(
+`UPDATE user_wallets
+ SET coins = coins - $1
+ WHERE user_id=$2`,
+[maxCoinsUsed, userId]
+);
+
+await pool.query(
+`INSERT INTO user_exam_unlocks(user_id,exam_id)
+ VALUES($1,$2)
+ ON CONFLICT DO NOTHING`,
+[userId, exam_id]
+);
+
+res.json({ success:true });
+
+}catch(err){
+res.status(500).json({ error:"Payment confirm failed" });
+}
+
 });
 
 
