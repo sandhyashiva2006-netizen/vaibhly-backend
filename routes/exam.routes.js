@@ -251,6 +251,48 @@ router.get("/results", verifyToken, async (req, res) => {
   }
 });
 
+const Razorpay = require("razorpay");
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET
+});
+
+router.post("/create-order", verifyToken, async (req, res) => {
+  try {
+
+    const { exam_id, amount } = req.body;
+
+    if (!exam_id || !amount) {
+      return res.status(400).json({
+        error: "Missing fields"
+      });
+    }
+
+    const options = {
+      amount: Number(amount) * 100,
+      currency: "INR",
+      receipt: "exam_" + Date.now()
+    };
+
+    const order = await razorpay.orders.create(options);
+
+    res.json({
+      success: true,
+      key: process.env.RAZORPAY_KEY_ID,
+      amount: options.amount,
+      orderId: order.id,
+      dbOrderId: Date.now()
+    });
+
+  } catch (err) {
+    console.error("Create order error:", err);
+
+    res.status(500).json({
+      error: "Failed to create order"
+    });
+  }
+});
 
 /* ======================================================
    SUBMIT EXAM (CRITICAL FIX)
@@ -577,51 +619,191 @@ router.get("/", verifyToken, async (req, res) => {
 });
 
 
-router.post("/confirm-payment", verifyToken, async (req,res)=>{
 
-try{
 
-const userId = req.user.id;
-const { exam_id } = req.body;
+const crypto = require("crypto");
 
-const COINS_PER_RUPEE = 10;
+router.post("/confirm-payment", verifyToken, async (req, res) => {
+  try {
 
-const examRes = await pool.query(
-`SELECT price FROM competitive_exams WHERE id=$1`,
-[exam_id]
-);
+    const userId = req.user.id;
 
-const price = Number(examRes.rows[0].price);
+    const {
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+      exam_id,
+      dbOrderId
+    } = req.body;
 
-const walletRes = await pool.query(
-`SELECT coins FROM user_wallets WHERE user_id=$1`,
-[userId]
-);
+    if (
+      !razorpay_payment_id ||
+      !razorpay_order_id ||
+      !razorpay_signature ||
+      !exam_id
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing payment data"
+      });
+    }
 
-const coins = walletRes.rows[0]?.coins || 0;
+    /* ==========================================
+       VERIFY SIGNATURE
+    ========================================== */
 
-const maxCoinsUsed = Math.min(coins, price * COINS_PER_RUPEE);
+    const generatedSignature = crypto
+      .createHmac(
+        "sha256",
+        process.env.RAZORPAY_KEY_SECRET
+      )
+      .update(
+        razorpay_order_id + "|" + razorpay_payment_id
+      )
+      .digest("hex");
 
-await pool.query(
-`UPDATE user_wallets
- SET coins = coins - $1
- WHERE user_id=$2`,
-[maxCoinsUsed, userId]
-);
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid payment signature"
+      });
+    }
 
-await pool.query(
-`INSERT INTO user_exam_unlocks(user_id,exam_id)
- VALUES($1,$2)
- ON CONFLICT DO NOTHING`,
-[userId, exam_id]
-);
+    /* ==========================================
+       CHECK EXAM EXISTS
+    ========================================== */
 
-res.json({ success:true });
+    const examRes = await pool.query(
+      `
+      SELECT id, title, price
+      FROM competitive_exams
+      WHERE id = $1 AND active = true
+      `,
+      [exam_id]
+    );
 
-}catch(err){
-res.status(500).json({ error:"Payment confirm failed" });
-}
+    if (!examRes.rows.length) {
+      return res.status(404).json({
+        success: false,
+        error: "Exam not found"
+      });
+    }
 
+    const exam = examRes.rows[0];
+    const price = Number(exam.price);
+
+    /* ==========================================
+       LOAD USER WALLET
+       10 coins = ₹1
+    ========================================== */
+
+    const COINS_PER_RUPEE = 10;
+
+    const walletRes = await pool.query(
+      `
+      SELECT coins
+      FROM user_wallets
+      WHERE user_id = $1
+      `,
+      [userId]
+    );
+
+    const coins = walletRes.rows[0]?.coins || 0;
+
+    const maxCoinsToUse =
+      Math.min(
+        coins,
+        price * COINS_PER_RUPEE
+      );
+
+    /* ==========================================
+       DEDUCT USED COINS
+    ========================================== */
+
+    if (maxCoinsToUse > 0) {
+
+      await pool.query(
+        `
+        UPDATE user_wallets
+        SET coins = coins - $1
+        WHERE user_id = $2
+        `,
+        [maxCoinsToUse, userId]
+      );
+    }
+
+    /* ==========================================
+       SAVE EXAM UNLOCK
+    ========================================== */
+
+    await pool.query(
+      `
+      INSERT INTO user_exam_unlocks
+      (user_id, exam_id)
+
+      VALUES ($1, $2)
+
+      ON CONFLICT DO NOTHING
+      `,
+      [userId, exam_id]
+    );
+
+    /* ==========================================
+       OPTIONAL ORDER HISTORY TABLE
+       only if table exists
+    ========================================== */
+
+    try {
+
+      await pool.query(
+        `
+        INSERT INTO exam_orders
+        (
+          user_id,
+          exam_id,
+          payment_id,
+          order_id,
+          amount,
+          created_at
+        )
+        VALUES ($1,$2,$3,$4,$5,NOW())
+        `,
+        [
+          userId,
+          exam_id,
+          razorpay_payment_id,
+          razorpay_order_id,
+          price
+        ]
+      );
+
+    } catch (e) {
+      console.log(
+        "exam_orders table optional, skipped"
+      );
+    }
+
+    /* ==========================================
+       SUCCESS
+    ========================================== */
+
+    return res.json({
+      success: true,
+      message: "Exam unlocked successfully"
+    });
+
+  } catch (err) {
+
+    console.error(
+      "confirm-payment error:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      error: "Payment confirmation failed"
+    });
+  }
 });
 
 
