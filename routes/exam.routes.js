@@ -10,53 +10,27 @@ router.post("/unlock", verifyToken, async (req, res) => {
     const userId = req.user.id;
     const { exam_id } = req.body;
 
+    if (!exam_id) {
+      return res.status(400).json({ error: "Exam ID required" });
+    }
+
     const exam = await pool.query(
-      "SELECT * FROM exams WHERE id = $1",
+      "SELECT * FROM exams WHERE id=$1",
       [exam_id]
     );
 
-    if (exam.rows.length === 0) {
-      return res.status(404).json({
-        error: "Exam not found"
-      });
+    if (!exam.rows.length) {
+      return res.status(404).json({ error: "Exam not found" });
     }
 
-    const userWallet = await pool.query(
-      "SELECT coins FROM user_wallets WHERE user_id=$1",
-      [userId]
-    );
-
-    const coins = userWallet.rows[0]?.coins || 0;
-    const cost = exam.rows[0].unlock_cost || 200;
-
-    if (coins < cost) {
-      return res.json({
-        partial: true,
-        rupeeToPay: exam.rows[0].price || 49
-      });
-    }
-
-    await pool.query(
-      "UPDATE user_wallets SET coins = coins - $1 WHERE user_id=$2",
-      [cost, userId]
-    );
-
-    await pool.query(
-      `INSERT INTO unlocked_exams(user_id, exam_id)
-       VALUES($1,$2)
-       ON CONFLICT DO NOTHING`,
-      [userId, exam_id]
-    );
-
-    res.json({
-      success: true
+    return res.json({
+      success: true,
+      message: "Unlock route working"
     });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      error: "Unlock failed"
-    });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
