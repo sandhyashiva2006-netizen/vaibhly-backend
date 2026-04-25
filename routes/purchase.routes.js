@@ -16,62 +16,101 @@ const razorpay = new Razorpay({
 
 /* ================= CREATE ORDER ================= */
 router.post("/create-order", verifyToken, async (req, res) => {
+
   try {
-    const { course_id, coupon_code, discount_amount, use_coins } = req.body;
 
-    if (!course_id) {
-      return res.status(400).json({ error: "course_id required" });
+    const {
+      course_id,
+      theme_code,
+      use_coins,
+      discount_amount
+    } = req.body;
+
+    let amount = 0;
+    let purchaseType = "course";
+
+    /* ================= COURSE ================= */
+
+    if (course_id) {
+
+      const courseRes = await pool.query(
+        `SELECT price FROM courses WHERE id=$1`,
+        [course_id]
+      );
+
+      if (!courseRes.rows.length) {
+        return res.status(404).json({
+          error:"Course not found"
+        });
+      }
+
+      amount = Number(courseRes.rows[0].price);
     }
 
-    const courseRes = await pool.query(
-      "SELECT price FROM courses WHERE id = $1",
-      [course_id]
-    );
+    /* ================= THEME ================= */
 
-    if (!courseRes.rows.length) {
-      return res.status(404).json({ error: "Course not found" });
+    else if (theme_code) {
+
+      purchaseType = "theme";
+
+      const themeRes = await pool.query(
+        `SELECT price FROM resume_themes
+         WHERE code=$1`,
+        [theme_code]
+      );
+
+      if (!themeRes.rows.length) {
+        return res.status(404).json({
+          error:"Theme not found"
+        });
+      }
+
+      amount = Number(themeRes.rows[0].price);
     }
 
-    let amount = Number(courseRes.rows[0].price);
-
-    console.log("💵 COURSE PRICE:", amount);
-
-    // 🎟 Coupon
-    if (discount_amount && Number(discount_amount) > 0) {
-      amount = Math.max(0, amount - Number(discount_amount));
+    else {
+      return res.status(400).json({
+        error:"No product selected"
+      });
     }
 
-    // 🪙 Coins (10 coins = ₹1)
+    /* ================= DISCOUNT ================= */
+
+    if (discount_amount > 0) {
+      amount -= Number(discount_amount);
+    }
+
+    /* ================= COINS ================= */
+
     let coinsUsed = 0;
 
-    if (use_coins && Number(use_coins) > 0) {
+    if (use_coins > 0) {
 
-      const walletRes = await pool.query(
-        "SELECT coins FROM user_wallets WHERE user_id = $1",
+      const wallet = await pool.query(
+        `SELECT coins FROM user_wallets
+         WHERE user_id=$1`,
         [req.user.id]
       );
 
-      const walletCoins = walletRes.rows[0]?.coins || 0;
-      const requestedCoins = Number(use_coins);
+      const userCoins =
+        wallet.rows[0]?.coins || 0;
 
-      const validCoins = Math.min(requestedCoins, walletCoins);
+      const validCoins =
+        Math.min(use_coins, userCoins);
 
-      const rupeeDiscount = Math.floor(validCoins / 10);
+      const rupees =
+        Math.floor(validCoins / 10);
 
-      console.log("🪙 VALID COINS:", validCoins);
-      console.log("💸 RUPEE DISCOUNT:", rupeeDiscount);
+      coinsUsed = rupees * 10;
 
-      if (rupeeDiscount > 0) {
-        coinsUsed = rupeeDiscount * 10;
-        amount = Math.max(0, amount - rupeeDiscount);
-      }
+      amount = Math.max(0, amount - rupees);
     }
-
-    console.log("💰 FINAL AMOUNT:", amount);
 
     if (amount <= 0) {
-      return res.status(400).json({ error: "Invalid final amount" });
+      amount = 1;
     }
+
+    /* ================= RAZORPAY ================= */
 
     const order = await razorpay.orders.create({
       amount: amount * 100,
@@ -79,26 +118,44 @@ router.post("/create-order", verifyToken, async (req, res) => {
       receipt: `rcpt_${Date.now()}`
     });
 
-    const orderDb = await pool.query(
-      `
-      INSERT INTO orders 
-      (user_id, course_id, total_amount, razorpay_order_id, status, coins_used)
-      VALUES ($1,$2,$3,$4,'PENDING',$5)
+    const db = await pool.query(`
+      INSERT INTO orders
+      (
+        user_id,
+        course_id,
+        theme_code,
+        purchase_type,
+        total_amount,
+        razorpay_order_id,
+        status,
+        coins_used
+      )
+      VALUES($1,$2,$3,$4,$5,$6,'PENDING',$7)
       RETURNING id
-      `,
-      [req.user.id, course_id, amount, order.id, coinsUsed]
-    );
+    `,[
+      req.user.id,
+      course_id || null,
+      theme_code || null,
+      purchaseType,
+      amount,
+      order.id,
+      coinsUsed
+    ]);
 
     res.json({
       orderId: order.id,
-      dbOrderId: orderDb.rows[0].id,
+      dbOrderId: db.rows[0].id,
       amount: order.amount,
       key: process.env.RAZORPAY_KEY_ID
     });
 
   } catch (err) {
-    console.error("Create order error:", err);
-    res.status(500).json({ error: "Failed to create order" });
+
+    console.error(err);
+
+    res.status(500).json({
+      error:"Failed to create order"
+    });
   }
 });
 
@@ -150,6 +207,36 @@ router.post("/verify", verifyToken, async (req, res) => {
         discount_amount || 0
       ]
     );
+
+const orderInfo = await pool.query(
+  `SELECT purchase_type, theme_code
+   FROM orders
+   WHERE id=$1`,
+  [dbOrderId]
+);
+
+const item = orderInfo.rows[0];
+
+/* ================= THEME PURCHASE ================= */
+
+if (item.purchase_type === "theme") {
+
+  await pool.query(`
+    INSERT INTO user_theme_purchases
+    (user_id, theme_code, payment_id)
+    VALUES($1,$2,$3)
+    ON CONFLICT DO NOTHING
+  `,[
+    req.user.id,
+    item.theme_code,
+    razorpay_payment_id
+  ]);
+
+  return res.json({
+    success:true,
+    type:"theme"
+  });
+}
 
     /* ================= COIN DEDUCTION ================= */
     const orderCoins = await pool.query(
