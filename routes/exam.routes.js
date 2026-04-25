@@ -15,7 +15,7 @@ router.post("/unlock", verifyToken, async (req, res) => {
     }
 
     const exam = await pool.query(
-      "SELECT * FROM exams WHERE id=$1",
+      "SELECT id, title, unlock_cost, price FROM exams WHERE id = $1",
       [exam_id]
     );
 
@@ -25,15 +25,14 @@ router.post("/unlock", verifyToken, async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Unlock route working"
+      exam: exam.rows[0]
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    console.error("unlock error", err);
+    res.status(500).json({ error: "Unlock failed" });
   }
 });
-
 
 /* ======================================================
    GET QUESTIONS FOR EXAM
