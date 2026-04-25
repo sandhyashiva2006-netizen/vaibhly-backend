@@ -62,12 +62,9 @@ router.get("/verify/:id", async (req, res) => {
         c.certificate_id,
         c.type,
         c.issued_at,
-        c.score,
-        c.total_questions,
 
         u.name AS student_name,
 
-        /* Main Title */
         CASE
           WHEN c.type = 'competitive'
             THEN ce.title
@@ -81,7 +78,6 @@ router.get("/verify/:id", async (req, res) => {
           ELSE 'Assessment'
         END AS certificate_title,
 
-        /* Optional separate fields */
         co.title AS course_title,
         ce.title AS competitive_exam_title,
         e.title AS exam_title
@@ -101,20 +97,18 @@ router.get("/verify/:id", async (req, res) => {
         ON e.id = c.exam_id
 
       WHERE c.certificate_id = $1
-
       LIMIT 1
     `, [req.params.id]);
 
     if (!result.rows.length) {
-
       return res.status(404).json({
-        valid: false,
-        message: "Certificate not found"
+        valid:false,
+        message:"Certificate not found"
       });
     }
 
     res.json({
-      valid: true,
+      valid:true,
       certificate: result.rows[0]
     });
 
@@ -123,8 +117,8 @@ router.get("/verify/:id", async (req, res) => {
     console.error("Certificate verify error:", err);
 
     res.status(500).json({
-      valid: false,
-      message: "Server error"
+      valid:false,
+      message:"Server error"
     });
   }
 });
