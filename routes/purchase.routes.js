@@ -173,9 +173,28 @@ router.post("/verify", verifyToken, async (req, res) => {
       discount_amount
     } = req.body;
 
-    if (!course_id || !dbOrderId) {
-      return res.status(400).json({ error: "Missing required data" });
-    }
+    if (!dbOrderId) {
+  return res.status(400).json({
+    error: "Missing order data"
+  });
+}
+
+const orderInfo = await pool.query(
+  `
+  SELECT purchase_type, course_id, theme_code
+  FROM orders
+  WHERE id = $1
+  `,
+  [dbOrderId]
+);
+
+if (!orderInfo.rows.length) {
+  return res.status(404).json({
+    error: "Order not found"
+  });
+}
+
+const order = orderInfo.rows[0];
 
     /* ================= VERIFY SIGNATURE ================= */
     const body = razorpay_order_id + "|" + razorpay_payment_id;
@@ -260,6 +279,29 @@ if (item.purchase_type === "theme") {
         [req.user.id, -coinsUsed]
       );
     }
+
+if (order.purchase_type === "theme") {
+
+  await pool.query(
+    `
+    INSERT INTO user_theme_purchases
+    (user_id, theme_code, payment_id)
+    VALUES ($1,$2,$3)
+    ON CONFLICT DO NOTHING
+    `,
+    [
+      req.user.id,
+      order.theme_code,
+      razorpay_payment_id
+    ]
+  );
+
+  return res.status(200).json({
+    success: true,
+    type: "theme",
+    message: "Theme purchased successfully"
+  });
+}
 
     /* ================= ENROLL USER ================= */
     await pool.query(
