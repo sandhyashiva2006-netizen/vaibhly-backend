@@ -90,6 +90,7 @@ router.post("/unlock", verifyToken, async (req, res) => {
    GET QUESTIONS FOR EXAM
 ====================================================== */
 
+
 router.get("/:examId/questions", verifyToken, async (req, res) => {
   try {
 
@@ -102,56 +103,66 @@ router.get("/:examId/questions", verifyToken, async (req, res) => {
       });
     }
 
+    /* ================= DETECT EXAM TYPE ================= */
+
     let examRes = await pool.query(
-`SELECT course_id, type
- FROM exams
- WHERE id = $1`,
-[examId]
-);
+      `
+      SELECT course_id, type
+      FROM exams
+      WHERE id = $1
+      `,
+      [examId]
+    );
 
-let examType = "course";
-let courseId = null;
+    let courseId = null;
+    let examType = "course";
 
-if (examRes.rows.length) {
+    if (examRes.rows.length > 0) {
 
-  courseId = examRes.rows[0].course_id;
-  examType = examRes.rows[0].type || "course";
+      courseId = examRes.rows[0].course_id;
+      examType = examRes.rows[0].type || "course";
 
-} else {
+    } else {
 
-  const compRes = await pool.query(
-    `SELECT id
-     FROM competitive_exams
-     WHERE id = $1 AND active = true`,
-    [examId]
-  );
+      const compRes = await pool.query(
+        `
+        SELECT id
+        FROM competitive_exams
+        WHERE id = $1 AND active = true
+        `,
+        [examId]
+      );
 
-  if (!compRes.rows.length) {
-    return res.status(404).json({
-      success:false,
-      error:"Exam not found"
-    });
-  }
+      if (!compRes.rows.length) {
+        return res.status(404).json({
+          success: false,
+          error: "Exam not found"
+        });
+      }
 
-  examType = "competitive";
-}
+      examType = "competitive";
+    }
 
-    const courseId = examRes.rows[0].course_id;
-    const examType = examRes.rows[0].type;
+    /* ================= LOAD QUESTIONS ================= */
 
     let result;
 
     if (examType === "competitive") {
 
-      result = await pool.query(`
+      result = await pool.query(
+        `
         SELECT id, question, option_a, option_b, option_c, option_d
         FROM competitive_questions
         WHERE exam_id = $1
-      `, [examId]);
+        ORDER BY id ASC
+        `,
+        [examId]
+      );
 
     } else {
 
-      result = await pool.query(`
+      result = await pool.query(
+        `
         SELECT id, question, option_a, option_b, option_c, option_d
         FROM questions
         WHERE exam_id = $1
@@ -161,12 +172,14 @@ if (examRes.rows.length) {
         SELECT id, question, option_a, option_b, option_c, option_d
         FROM exam_questions
         WHERE course_id = $2
-      `, [examId, courseId]);
+        `,
+        [examId, courseId]
+      );
     }
 
     if (!result.rows.length) {
       return res.json({
-        success: false,
+        success: true,
         questions: []
       });
     }
@@ -182,14 +195,16 @@ if (examRes.rows.length) {
       ]
     }));
 
-    res.json({
+    return res.json({
       success: true,
       questions
     });
 
   } catch (err) {
+
     console.error("❌ Questions error:", err);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       error: "Failed to load questions"
     });
@@ -319,11 +334,10 @@ router.post("/create-order", verifyToken, async (req, res) => {
 /* ======================================================
    SUBMIT EXAM (CRITICAL FIX)
 ====================================================== */
+
+
 router.post("/submit", verifyToken, async (req, res) => {
   try {
-
-    console.log("📥 BACKEND RECEIVED:", req.body);
-    console.log("USER:", req.user);
 
     const userId = req.user.id;
     const { exam_id, answers } = req.body;
@@ -335,148 +349,158 @@ router.post("/submit", verifyToken, async (req, res) => {
       });
     }
 
+    /* ================= DETECT EXAM TYPE ================= */
 
+    let examInfo = await pool.query(
+      `
+      SELECT course_id, type
+      FROM exams
+      WHERE id = $1
+      `,
+      [exam_id]
+    );
 
+    let courseId = null;
+    let examType = "course";
 
+    if (examInfo.rows.length > 0) {
 
-/* ================= VALIDATE USER COURSE ACCESS ================= */
+      courseId = examInfo.rows[0].course_id;
+      examType = examInfo.rows[0].type || "course";
 
+    } else {
 
-let examInfo = await pool.query(
-  `
-  SELECT course_id, type
-  FROM exams
-  WHERE id = $1
-  `,
-  [exam_id]
-);
+      const compRes = await pool.query(
+        `
+        SELECT id
+        FROM competitive_exams
+        WHERE id = $1 AND active = true
+        `,
+        [exam_id]
+      );
 
-let courseId = null;
-let examType = "course";
+      if (!compRes.rows.length) {
+        return res.status(404).json({
+          success: false,
+          error: "Exam not found"
+        });
+      }
 
-/* Normal course exam found */
-if (examInfo.rows.length) {
+      examType = "competitive";
+    }
 
-  courseId = examInfo.rows[0].course_id;
-  examType = examInfo.rows[0].type || "course";
+    /* ================= COURSE ACCESS CHECK ================= */
 
-} else {
+    if (examType === "course") {
 
-  /* Try competitive exam */
-  const compRes = await pool.query(
-    `
-    SELECT id
-    FROM competitive_exams
-    WHERE id = $1 AND active = true
-    `,
-    [exam_id]
-  );
+      const accessCheck = await pool.query(
+        `
+        SELECT 1
+        FROM user_courses
+        WHERE user_id = $1 AND course_id = $2
+        `,
+        [userId, courseId]
+      );
 
-  if (!compRes.rows.length) {
-    return res.status(404).json({
-      success:false,
-      error:"Exam not found"
-    });
-  }
+      if (!accessCheck.rows.length) {
+        return res.status(403).json({
+          success: false,
+          error: "You are not enrolled in this course"
+        });
+      }
+    }
 
-  examType = "competitive";
-}
+    /* ================= LOAD ANSWERS ================= */
 
-if (examType === "course") {
+    let qRes;
 
-  const accessCheck = await pool.query(
-    `SELECT 1 FROM user_courses 
-     WHERE user_id = $1 AND course_id = $2`,
-    [userId, courseId]
-  );
+    if (examType === "competitive") {
 
-  if (accessCheck.rows.length === 0) {
-    return res.status(403).json({
-      success: false,
-      error: "You are not enrolled in this course"
-    });
-  }
-}
+      qRes = await pool.query(
+        `
+        SELECT id, correct_option
+        FROM competitive_questions
+        WHERE exam_id = $1
+        `,
+        [exam_id]
+      );
 
-/* ================= LOAD QUESTIONS ================= */
+    } else {
 
-let qRes;
+      qRes = await pool.query(
+        `
+        SELECT id, correct_option
+        FROM questions
+        WHERE exam_id = $1
 
-if (examType === "competitive") {
+        UNION ALL
 
-  // ✅ COMPETITIVE EXAM → ONLY competitive_questions
-  qRes = await pool.query(
-    `SELECT id, correct_option 
-     FROM competitive_questions 
-     WHERE exam_id = $1`,
-    [exam_id]
-  );
+        SELECT id, correct_answer AS correct_option
+        FROM exam_questions
+        WHERE course_id = $2
+        `,
+        [exam_id, courseId]
+      );
+    }
 
-} else {
-
-  // ✅ COURSE EXAM → questions + exam_questions
-  qRes = await pool.query(
-    `
-    SELECT id, correct_option FROM questions WHERE exam_id = $1
-
-    UNION ALL
-
-    SELECT id, correct_answer AS correct_option 
-    FROM exam_questions WHERE course_id = $2
-    `,
-    [exam_id, courseId]
-  );
-}
     /* ================= ATTEMPT LIMIT ================= */
 
     const attemptCheck = await pool.query(
-      `SELECT COUNT(*) FROM exam_attempts WHERE user_id = $1 AND exam_id = $2`,
+      `
+      SELECT COUNT(*) 
+      FROM exam_attempts
+      WHERE user_id = $1 AND exam_id = $2
+      `,
       [userId, exam_id]
     );
 
     const attempts = Number(attemptCheck.rows[0].count);
-
     const MAX_ATTEMPTS = 5;
 
     const alreadyPassed = await pool.query(
-  `SELECT * FROM exam_attempts 
-   WHERE user_id = $1 
-   AND exam_id = $2 
-   AND status = 'PASSED'
-   LIMIT 1`,
-  [userId, exam_id]
-);
+      `
+      SELECT 1
+      FROM exam_attempts
+      WHERE user_id = $1
+      AND exam_id = $2
+      AND status = 'PASSED'
+      LIMIT 1
+      `,
+      [userId, exam_id]
+    );
 
-    if (alreadyPassed.rows.length > 0) {
-  return res.status(400).json({
-    success: false,
-    error: "You already passed this exam"
-  });
-}
+    if (alreadyPassed.rows.length) {
+      return res.status(400).json({
+        success: false,
+        error: "You already passed this exam"
+      });
+    }
 
-if (attempts >= MAX_ATTEMPTS) {
-  return res.status(403).json({
-    success: false,
-    error: "Maximum attempts reached"
-  });
-}
+    if (attempts >= MAX_ATTEMPTS) {
+      return res.status(403).json({
+        success: false,
+        error: "Maximum attempts reached"
+      });
+    }
 
     const totalQuestions = Object.keys(answers).length;
 
-if (totalQuestions === 0) {
-  return res.status(400).json({
-    success: false,
-    error: "No questions found for this exam"
-  });
-}
+    if (totalQuestions === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "No answers submitted"
+      });
+    }
 
     /* ================= CALCULATE SCORE ================= */
 
     let correctCount = 0;
 
     qRes.rows.forEach(q => {
+
       const selectedIndex = Number(answers[q.id]);
-      const selectedLetter = ["A", "B", "C", "D"][selectedIndex];
+      const selectedLetter =
+        ["A", "B", "C", "D"][selectedIndex];
 
       if (selectedLetter === q.correct_option) {
         correctCount++;
@@ -487,120 +511,136 @@ if (totalQuestions === 0) {
       (correctCount / totalQuestions) * 100
     );
 
-    const status = percentage >= 50 ? "PASSED" : "FAILED";
+    const status =
+      percentage >= 50 ? "PASSED" : "FAILED";
 
-    console.log("✅ Correct:", correctCount);
-    console.log("📊 Percentage:", percentage);
-    console.log("🏁 Status:", status);
+    /* ================= SAVE ATTEMPT ================= */
 
-/* ================= SAVE ATTEMPT ================= */
+    await pool.query(
+      `
+      INSERT INTO exam_attempts
+      (user_id, exam_id, score, status, attempted_at)
+      VALUES ($1,$2,$3,$4,NOW())
+      `,
+      [userId, exam_id, correctCount, status]
+    );
 
-await pool.query(
-  `
-  INSERT INTO exam_attempts
-  (user_id, exam_id, score, status, attempted_at)
-  VALUES ($1,$2,$3,$4,NOW())
-  `,
-  [userId, exam_id, correctCount, status]
-);
+    /* ================= CERTIFICATE ================= */
 
-/* ================= GENERATE CERTIFICATE ================= */
+    let certificateId = null;
 
-let certificateId = null;
+    if (status === "PASSED") {
 
-if (status === "PASSED") {
+      const existingCert = await pool.query(
+        `
+        SELECT certificate_id
+        FROM certificates
+        WHERE user_id = $1
+        AND exam_id = $2
+        `,
+        [userId, exam_id]
+      );
 
-  const existingCert = await pool.query(
-    `SELECT certificate_id FROM certificates
-     WHERE user_id = $1 AND exam_id = $2`,
-    [userId, exam_id]
-  );
+      if (existingCert.rows.length) {
 
-  if (existingCert.rows.length > 0) {
+        certificateId =
+          existingCert.rows[0].certificate_id;
 
-    certificateId = existingCert.rows[0].certificate_id;
+      } else {
 
-  } else {
+        certificateId =
+          "EDU-" +
+          Math.random()
+            .toString(36)
+            .substring(2, 10)
+            .toUpperCase();
 
-    certificateId =
-      "EDU-" + Math.random().toString(36).substring(2, 10).toUpperCase();
+        await pool.query(
+          `
+          INSERT INTO certificates
+          (user_id, exam_id, course_id, certificate_id, issued_at)
+          VALUES ($1,$2,$3,$4,NOW())
+          `,
+          [
+            userId,
+            exam_id,
+            examType === "competitive"
+              ? null
+              : courseId,
+            certificateId
+          ]
+        );
+      }
+    }
 
-  await pool.query(
-  `INSERT INTO certificates 
-   (user_id, exam_id, course_id, certificate_id, issued_at)
-   VALUES ($1, $2, $3, $4, NOW())`,
-  [
-    userId,
-    exam_id,
-    examType === "competitive" ? null : courseId,  // 🔥 FIX
-    certificateId
-  ]
-);
+    /* ================= REWARD COINS ================= */
+
+    const rewardCoins =
+      status === "PASSED"
+        ? (examType === "competitive" ? 30 : 20)
+        : 5;
+
+    await pool.query(
+      `
+      INSERT INTO user_wallets (user_id, coins)
+      VALUES ($1,$2)
+
+      ON CONFLICT (user_id)
+      DO UPDATE
+      SET coins =
+      user_wallets.coins + EXCLUDED.coins
+      `,
+      [userId, rewardCoins]
+    );
+
+    /* ================= SAVE RESULT ================= */
+
+    const normalExamExists = await pool.query(
+      `
+      SELECT id FROM exams WHERE id = $1
+      `,
+      [exam_id]
+    );
+
+    if (normalExamExists.rows.length) {
+
+      await pool.query(
+        `
+        INSERT INTO exam_results
+        (user_id, exam_id, score, total_questions, status, certificate_id, attempted_at)
+        VALUES ($1,$2,$3,$4,$5,$6,NOW())
+        `,
+        [
+          userId,
+          exam_id,
+          correctCount,
+          totalQuestions,
+          status,
+          certificateId
+        ]
+      );
+    }
+
+    /* ================= RESPONSE ================= */
+
+    return res.json({
+      success: true,
+      score: correctCount,
+      total: totalQuestions,
+      percentage,
+      status,
+      certificateId
+    });
+
+  } catch (err) {
+
+    console.error("❌ exam submit error:", err);
+
+    return res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
-}
-
-/* ================= 🎁 ADD COINS (NEW) ================= */
-
-  const coinReward = examType === "competitive" ? 30 : 20;
-
-await pool.query(`
-  INSERT INTO user_wallets (user_id, coins)
-  VALUES ($1, $2)
-  ON CONFLICT (user_id)
-  DO UPDATE SET coins = user_wallets.coins + EXCLUDED.coins
-`, [userId, coinReward]);
-
-
-if (status === "FAILED") {
-  await pool.query(`
-    UPDATE user_wallets
-SET coins = coins + 5
-WHERE user_id = $1
-  `, [userId]);
-}
-
-/* ================= SAVE RESULT ================= */
-
-const examExists = await pool.query(
-  `SELECT id FROM exams WHERE id = $1`,
-  [exam_id]
-);
-
-if (examExists.rows.length > 0) {
-
-  await pool.query(`
-    INSERT INTO exam_results
-    (user_id, exam_id, score, total_questions, status, certificate_id, attempted_at)
-    VALUES ($1,$2,$3,$4,$5,$6,NOW())
-  `, [
-    userId,
-    exam_id,
-    correctCount,
-    totalQuestions,
-    status,
-    certificateId   // ✅ linked correctly
-  ]);
-}
-
- /* ================= RESPONSE ================= */
-
-return res.json({
-  success: true,
-  score: correctCount,
-  total: totalQuestions,
-  percentage,
-  status,
-  certificateId
-});
-
-} catch (err) {
-  console.error("❌ exam submit error:", err);
-
-  return res.status(500).json({
-    success: false,
-    error: err.message
-  });
-}
 });
 
 /* ================= CREATE EXAM ================= */
