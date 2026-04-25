@@ -617,6 +617,23 @@ if (examType === "course" && attempts >= 1) {
             .substring(2, 10)
             .toUpperCase();
 
+let competitiveTitle = "";
+
+if (examType === "competitive") {
+
+  const titleRes = await pool.query(
+    `
+    SELECT title
+    FROM competitive_exams
+    WHERE id = $1
+    `,
+    [exam_id]
+  );
+
+  competitiveTitle =
+    titleRes.rows[0]?.title || "Competitive Exam";
+}
+
 await pool.query(
 `
 INSERT INTO certificates
@@ -649,7 +666,7 @@ VALUES ($1,$2,$3,$4,$5,$6,NOW())
    : "course",
 
  examType === "competitive"
-   ? "Competitive Exam"
+   ? competitiveTitle
    : null
 ]
 );
