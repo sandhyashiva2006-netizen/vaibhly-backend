@@ -556,20 +556,25 @@ router.post("/submit", verifyToken, async (req, res) => {
             .toUpperCase();
 
         await pool.query(
-          `
-          INSERT INTO certificates
-          (user_id, exam_id, course_id, certificate_id, issued_at)
-          VALUES ($1,$2,$3,$4,NOW())
-          `,
-          [
-            userId,
-            exam_id,
-            examType === "competitive"
-              ? null
-              : courseId,
-            certificateId
-          ]
-        );
+`
+INSERT INTO certificates
+(user_id, exam_id, course_id, certificate_id, issued_at)
+VALUES ($1,$2,$3,$4,NOW())
+`,
+[
+ userId,
+
+ examType === "competitive"
+   ? null
+   : exam_id,
+
+ examType === "competitive"
+   ? null
+   : courseId,
+
+ certificateId
+]
+);
       }
     }
 
