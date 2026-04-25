@@ -7,95 +7,56 @@ const EXAM_UNLOCK_COST = 200; // same for all exams
 
 router.post("/unlock", verifyToken, async (req, res) => {
   try {
-    const { exam_id } = req.body;
     const userId = req.user.id;
+    const { exam_id } = req.body;
 
-    if (!exam_id) {
-      return res.status(400).json({ error: "exam_id required" });
-    }
-
-    const COIN_RATE = 10;
-
-/* Get exam price */
-const examRes = await pool.query(
-`SELECT price FROM competitive_exams WHERE id=$1`,
-[exam_id]
-);
-
-if(!examRes.rows.length){
- return res.status(404).json({error:"Exam not found"});
-}
-
-const examPrice = Number(examRes.rows[0].price);
-
-/* convert rupees → coins */
-const EXAM_COST = examPrice * COIN_RATE;
-
-    // 🔎 Get wallet
-    const walletRes = await pool.query(
-      "SELECT coins FROM user_wallets WHERE user_id = $1",
-      [userId]
+    const exam = await pool.query(
+      "SELECT * FROM exams WHERE id = $1",
+      [exam_id]
     );
 
-    const walletCoins = walletRes.rows[0]?.coins || 0;
-
-    // 🟢 CASE 1: Enough coins
-    if (walletCoins >= EXAM_COST) {
-
-      await pool.query(
-        "UPDATE user_wallets SET coins = coins - $1 WHERE user_id = $2",
-        [EXAM_COST, userId]
-      );
-
-
-      await pool.query(
-        `INSERT INTO coin_transactions (user_id, type, amount)
-         VALUES ($1, 'exam_unlock', $2)`,
-        [userId, -EXAM_COST]
-      );
-
-      await pool.query(
-        `INSERT INTO user_exam_unlocks (user_id, exam_id)
-         VALUES ($1,$2)
-         ON CONFLICT DO NOTHING`,
-        [userId, exam_id]
-      );
-
-      return res.json({
-        success: true,
-        method: "coins"
+    if (exam.rows.length === 0) {
+      return res.status(404).json({
+        error: "Exam not found"
       });
     }
 
-const existing = await pool.query(
-`SELECT * FROM user_exam_unlocks
- WHERE user_id=$1 AND exam_id=$2`,
-[userId, exam_id]
-);
+    const userWallet = await pool.query(
+      "SELECT coins FROM user_wallets WHERE user_id=$1",
+      [userId]
+    );
 
-if(existing.rows.length){
- return res.json({
-  success:true,
-  message:"Already unlocked"
- });
-}
+    const coins = userWallet.rows[0]?.coins || 0;
+    const cost = exam.rows[0].unlock_cost || 200;
 
-    // 🔴 CASE 2: Not enough coins → calculate balance
-    const remainingCoins = EXAM_COST - walletCoins;
-    const rupeeToPay = Math.ceil(remainingCoins / COIN_RATE);
+    if (coins < cost) {
+      return res.json({
+        partial: true,
+        rupeeToPay: exam.rows[0].price || 49
+      });
+    }
 
-    return res.json({
-      success: false,
-      partial: true,
-      currentCoins: walletCoins,
-      requiredCoins: EXAM_COST,
-      remainingCoins,
-      rupeeToPay
+    await pool.query(
+      "UPDATE user_wallets SET coins = coins - $1 WHERE user_id=$2",
+      [cost, userId]
+    );
+
+    await pool.query(
+      `INSERT INTO unlocked_exams(user_id, exam_id)
+       VALUES($1,$2)
+       ON CONFLICT DO NOTHING`,
+      [userId, exam_id]
+    );
+
+    res.json({
+      success: true
     });
 
   } catch (err) {
-    console.error("Exam unlock error:", err);
-    res.status(500).json({ error: "Unlock failed" });
+    console.error(err);
+    res.status(500).json({
+      error: "Unlock failed"
+    });
   }
 });
 
