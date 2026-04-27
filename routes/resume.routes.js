@@ -913,6 +913,16 @@ router.post("/themes/create-order", verifyToken, async (req, res) => {
         ]
       );
 
+await pool.query(`
+INSERT INTO wallet_transactions
+(user_id, type, coins, description)
+VALUES ($1, 'debit', $2, $3)
+`, [
+  userId,
+  coinsUsed,
+  'Theme Purchase - ' + theme_code
+]);
+
       return res.json({
         success: true,
         fullyPaid: true,
@@ -984,6 +994,18 @@ router.post("/themes/verify", verifyToken, async (req, res) => {
 
     if (expectedSignature !== razorpay_signature)
       return res.status(400).json({ error: "Payment verification failed" });
+
+if (coinsUsed > 0) {
+  await pool.query(`
+  INSERT INTO wallet_transactions
+  (user_id, type, coins, description)
+  VALUES ($1,'debit',$2,$3)
+  `,[
+    req.user.id,
+    coinsUsed,
+    'Theme Purchase - ' + theme_code
+  ]);
+}
 
     // Save purchase
     await pool.query(
