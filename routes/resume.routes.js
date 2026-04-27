@@ -976,54 +976,95 @@ const crypto = require("crypto");
 /* ================= VERIFY PAYMENT ================= */
 router.post("/themes/verify", verifyToken, async (req, res) => {
   try {
+
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
-      theme_code
+      theme_code,
+      coinsUsed
     } = req.body;
 
     const userId = req.user.id;
 
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    /* ================= VERIFY SIGNATURE ================= */
+
+    const body =
+      razorpay_order_id + "|" + razorpay_payment_id;
 
     const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .createHmac(
+        "sha256",
+        process.env.RAZORPAY_KEY_SECRET
+      )
       .update(body.toString())
       .digest("hex");
 
-    if (expectedSignature !== razorpay_signature)
-      return res.status(400).json({ error: "Payment verification failed" });
+    if (
+      expectedSignature !== razorpay_signature
+    ) {
+      return res.status(400).json({
+        error: "Payment verification failed"
+      });
+    }
 
-if (coinsUsed > 0) {
-  await pool.query(`
-  INSERT INTO wallet_transactions
-  (user_id, type, coins, description)
-  VALUES ($1,'debit',$2,$3)
-  `,[
-    req.user.id,
-    coinsUsed,
-    'Theme Purchase - ' + theme_code
-  ]);
-}
+    /* ================= DEDUCT COINS ================= */
 
-    // Save purchase
+    const usedCoins =
+      Number(coinsUsed || 0);
+
+    if (usedCoins > 0) {
+
+      await pool.query(
+        `
+        UPDATE user_wallets
+        SET coins = coins - $1
+        WHERE user_id = $2
+        `,
+        [usedCoins, userId]
+      );
+
+      await pool.query(
+        `
+        INSERT INTO wallet_transactions
+        (user_id, type, coins, description)
+        VALUES ($1,'debit',$2,$3)
+        `,
+        [
+          userId,
+          usedCoins,
+          "Theme Purchase - " + theme_code
+        ]
+      );
+    }
+
+    /* ================= SAVE PURCHASE ================= */
+
     await pool.query(
       `
-      INSERT INTO theme_purchases (user_id, theme_code)
-      VALUES ($1, $2)
+      INSERT INTO theme_purchases
+      (user_id, theme_code)
+      VALUES ($1,$2)
       ON CONFLICT DO NOTHING
       `,
       [userId, theme_code]
     );
 
-    res.json({ success: true });
+    res.json({
+      success: true
+    });
 
   } catch (err) {
-    console.error("Payment verify failed:", err);
-    res.status(500).json({ error: "Verification failed" });
+
+    console.error(
+      "Payment verify failed:",
+      err
+    );
+
+    res.status(500).json({
+      error: "Verification failed"
+    });
   }
 });
-
 
 module.exports = router;
