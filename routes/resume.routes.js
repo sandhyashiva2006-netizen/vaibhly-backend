@@ -808,37 +808,156 @@ router.get("/themes", verifyToken, async (req, res) => {
 /* ================= CREATE THEME ORDER ================= */
 router.post("/themes/create-order", verifyToken, async (req, res) => {
   try {
+
     const { theme_code } = req.body;
     const userId = req.user.id;
 
+    /* ================= GET THEME ================= */
+
     const themeRes = await pool.query(
-      "SELECT * FROM resume_themes WHERE code=$1",
+      `SELECT * FROM resume_themes
+       WHERE code = $1`,
       [theme_code]
     );
 
-    if (!themeRes.rows.length)
-      return res.status(404).json({ error: "Theme not found" });
+    if (!themeRes.rows.length) {
+      return res.status(404).json({
+        error: "Theme not found"
+      });
+    }
 
     const theme = themeRes.rows[0];
 
-    if (!theme.is_premium)
-      return res.status(400).json({ error: "Theme is free" });
+    if (!theme.is_premium) {
+      return res.status(400).json({
+        error: "Theme is free"
+      });
+    }
+
+    /* ================= ALREADY PURCHASED ================= */
+
+    const ownedRes = await pool.query(
+      `
+      SELECT id
+      FROM user_theme_purchases
+      WHERE user_id = $1
+      AND theme_code = $2
+      `,
+      [userId, theme_code]
+    );
+
+    if (ownedRes.rows.length) {
+      return res.json({
+        success: true,
+        alreadyOwned: true,
+        message: "Theme already purchased"
+      });
+    }
+
+    /* ================= PRICE ================= */
+
+    const themePrice = Number(theme.price || 0);
+
+    /* ================= WALLET COINS ================= */
+
+    const walletRes = await pool.query(
+      `
+      SELECT coins
+      FROM user_wallets
+      WHERE user_id = $1
+      `,
+      [userId]
+    );
+
+    const walletCoins =
+      Number(walletRes.rows[0]?.coins || 0);
+
+    /* 10 coins = ₹1 */
+
+    const rupeeValue =
+      Math.floor(walletCoins / 10);
+
+    const usableDiscount =
+      Math.min(themePrice, rupeeValue);
+
+    const coinsUsed =
+      usableDiscount * 10;
+
+    const finalAmount =
+      themePrice - usableDiscount;
+
+    /* ================= FULLY PAID BY COINS ================= */
+
+    if (finalAmount <= 0) {
+
+      await pool.query(
+        `
+        UPDATE user_wallets
+        SET coins = coins - $1
+        WHERE user_id = $2
+        `,
+        [coinsUsed, userId]
+      );
+
+      await pool.query(
+        `
+        INSERT INTO user_theme_purchases
+        (user_id, theme_code, payment_id)
+        VALUES ($1,$2,$3)
+        ON CONFLICT DO NOTHING
+        `,
+        [
+          userId,
+          theme_code,
+          "COINS_ONLY"
+        ]
+      );
+
+      return res.json({
+        success: true,
+        fullyPaid: true,
+        coinsUsed,
+        finalAmount: 0
+      });
+    }
+
+    /* ================= CREATE RAZORPAY ORDER ================= */
 
     const order = await razorpay.orders.create({
-      amount: theme.price * 100, // ₹ to paise
+
+      amount: finalAmount * 100,
       currency: "INR",
-      receipt: `theme_${theme_code}_${userId}`,
+      receipt:
+        `theme_${theme_code}_${userId}_${Date.now()}`
     });
 
     res.json({
+
+      success: true,
+
       orderId: order.id,
-      amount: theme.price,
-      key: process.env.RAZORPAY_KEY_ID
+
+      amount: finalAmount,
+
+      key: process.env.RAZORPAY_KEY_ID,
+
+      coinsUsed,
+
+      originalPrice: themePrice,
+
+      discountRupees: usableDiscount
     });
 
   } catch (err) {
-    console.error("Order creation failed:", err);
-    res.status(500).json({ error: "Order failed" });
+
+    console.error(
+      "Theme order creation failed:",
+      err
+    );
+
+    res.status(500).json({
+      error: "Order failed"
+    });
   }
 });
 
