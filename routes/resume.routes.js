@@ -987,7 +987,7 @@ router.post("/themes/verify", verifyToken, async (req, res) => {
 
     const userId = req.user.id;
 
-    /* ================= VERIFY SIGNATURE ================= */
+    /* ================= VERIFY ================= */
 
     const body =
       razorpay_order_id + "|" + razorpay_payment_id;
@@ -997,12 +997,10 @@ router.post("/themes/verify", verifyToken, async (req, res) => {
         "sha256",
         process.env.RAZORPAY_KEY_SECRET
       )
-      .update(body.toString())
+      .update(body)
       .digest("hex");
 
-    if (
-      expectedSignature !== razorpay_signature
-    ) {
+    if (expectedSignature !== razorpay_signature) {
       return res.status(400).json({
         error: "Payment verification failed"
       });
@@ -1015,53 +1013,50 @@ router.post("/themes/verify", verifyToken, async (req, res) => {
 
     if (usedCoins > 0) {
 
-      await pool.query(
-        `
+      await pool.query(`
         UPDATE user_wallets
-        SET coins = coins - $1
+        SET coins = GREATEST(coins - $1,0)
         WHERE user_id = $2
-        `,
-        [usedCoins, userId]
-      );
+      `, [usedCoins, userId]);
 
-      await pool.query(
-        `
+      /* wallet history using REAL schema */
+
+      await pool.query(`
         INSERT INTO wallet_transactions
-        (user_id, type, coins, description)
-        VALUES ($1,'debit',$2,$3)
-        `,
-        [
-          userId,
-          usedCoins,
-          "Theme Purchase - " + theme_code
-        ]
-      );
+        (recruiter_id, amount, type, purpose)
+        VALUES ($1,$2,$3,$4)
+      `, [
+        userId,
+        usedCoins,
+        'debit',
+        'Theme Purchase - ' + theme_code
+      ]);
     }
 
     /* ================= SAVE PURCHASE ================= */
 
-    await pool.query(
-      `
+    await pool.query(`
       INSERT INTO theme_purchases
       (user_id, theme_code)
       VALUES ($1,$2)
       ON CONFLICT DO NOTHING
-      `,
-      [userId, theme_code]
-    );
+    `, [
+      userId,
+      theme_code
+    ]);
 
-    res.json({
+    return res.json({
       success: true
     });
 
   } catch (err) {
 
     console.error(
-      "Payment verify failed:",
+      "Theme verify failed:",
       err
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       error: "Verification failed"
     });
   }
