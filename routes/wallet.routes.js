@@ -24,23 +24,48 @@ router.get("/balance", verifyToken, async (req, res) => {
 /* ================= GET WALLET TRANSACTIONS ================= */
 router.get("/transactions", verifyToken, async (req, res) => {
   try {
-    const result = await pool.query(
-      `
-      SELECT type, amount, reference_id, created_at
+
+    const result = await pool.query(`
+      SELECT
+        type,
+        amount,
+        created_at,
+
+        CASE
+          WHEN reference_id IS NOT NULL
+          THEN 'Coin Activity'
+          ELSE type
+        END AS purpose
+
       FROM coin_transactions
       WHERE user_id = $1
+
+      UNION ALL
+
+      SELECT
+        type,
+        amount,
+        created_at,
+        purpose
+
+      FROM wallet_transactions
+      WHERE recruiter_id = $1
+
       ORDER BY created_at DESC
-      `,
-      [req.user.id]
-    );
+    `, [req.user.id]);
 
     res.json({
       success: true,
       transactions: result.rows
     });
+
   } catch (err) {
-    console.error("Wallet transactions error:", err);
-    res.status(500).json({ error: "Failed to load transactions" });
+
+    console.error(err);
+
+    res.status(500).json({
+      error: "Failed to load transactions"
+    });
   }
 });
 

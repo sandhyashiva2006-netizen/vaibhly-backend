@@ -1022,16 +1022,27 @@ router.post("/themes/verify", verifyToken, async (req, res) => {
       /* wallet history using REAL schema */
 
       await pool.query(`
-        INSERT INTO wallet_transactions
-        (recruiter_id, amount, type, purpose)
-        VALUES ($1,$2,$3,$4)
-      `, [
-        userId,
-        usedCoins,
-        'debit',
-        'Theme Purchase - ' + theme_code
-      ]);
-    }
+INSERT INTO wallet_transactions
+(recruiter_id, amount, type, purpose)
+VALUES ($1,$2,$3,$4)
+`,[
+ userId,
+ usedCoins,
+ 'debit',
+ 'Theme Purchase - ' + theme_code
+]);
+
+await pool.query(`
+INSERT INTO orders
+(user_id, total_amount, status, purchase_type, theme_code, razorpay_order_id)
+VALUES ($1,$2,'PAID',$3,$4,$5)
+`,[
+ userId,
+ 0,                 // or actual amount if you pass it
+ 'theme',
+ theme_code,
+ razorpay_order_id
+]);
 
     /* ================= SAVE PURCHASE ================= */
 
