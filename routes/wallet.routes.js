@@ -26,31 +26,9 @@ router.get("/transactions", verifyToken, async (req, res) => {
   try {
 
     const result = await pool.query(`
-      SELECT
-        type,
-        amount,
-        created_at,
-
-        CASE
-          WHEN reference_id IS NOT NULL
-          THEN 'Coin Activity'
-          ELSE type
-        END AS purpose
-
-      FROM coin_transactions
+      SELECT amount, type, purpose, created_at
+      FROM wallet_ledger
       WHERE user_id = $1
-
-      UNION ALL
-
-      SELECT
-        type,
-        amount,
-        created_at,
-        purpose
-
-      FROM wallet_transactions
-      WHERE recruiter_id = $1
-
       ORDER BY created_at DESC
     `, [req.user.id]);
 
@@ -60,12 +38,8 @@ router.get("/transactions", verifyToken, async (req, res) => {
     });
 
   } catch (err) {
-
     console.error(err);
-
-    res.status(500).json({
-      error: "Failed to load transactions"
-    });
+    res.status(500).json({ error: "Failed to load transactions" });
   }
 });
 
@@ -85,7 +59,7 @@ router.post("/reward-course", verifyToken, async (req, res) => {
 
     const already = await pool.query(`
       SELECT 1
-      FROM coin_transactions
+      FROM wallet_ledger
       WHERE user_id = $1
       AND type = 'course_complete'
       AND reference_id = $2
@@ -93,10 +67,7 @@ router.post("/reward-course", verifyToken, async (req, res) => {
     `, [userId, course_id]);
 
     if (already.rows.length) {
-      return res.json({
-        success: true,
-        message: "Already rewarded"
-      });
+      return res.json({ success: true, message: "Already rewarded" });
     }
 
     await pool.query(`
@@ -106,10 +77,15 @@ router.post("/reward-course", verifyToken, async (req, res) => {
     `, [userId]);
 
     await pool.query(`
-      INSERT INTO coin_transactions
-      (user_id,type,amount,reference_id)
-      VALUES ($1,'course_complete',50,$2)
-    `, [userId, course_id]);
+      INSERT INTO wallet_ledger
+      (user_id, amount, type, reference_id, purpose)
+      VALUES ($1,$2,'course_complete',$3,$4)
+    `, [
+      userId,
+      50,
+      course_id,
+      'Course Completion Reward'
+    ]);
 
     res.json({ success: true });
 
@@ -175,11 +151,16 @@ router.post("/buy", verifyToken, async (req, res) => {
       [item.coin_cost, userId]
     );
 
-    await pool.query(
-      `INSERT INTO coin_transactions (user_id,type,amount,reference_id)
-       VALUES ($1,'purchase',$2,$3)`,
-      [userId, -item.coin_cost, item.id]
-    );
+    await pool.query(`
+INSERT INTO wallet_ledger
+(user_id, amount, type, purpose)
+VALUES ($1,$2,$3,$4)
+`,[
+ userId,
+ -item.coin_cost,
+ 'store_purchase',
+ 'Store Item Purchase'
+]);
 
     res.json({ success: true, item });
 
@@ -213,10 +194,15 @@ router.post("/buy-coins", verifyToken, async (req, res) => {
     `, [userId, coins]);
 
     await pool.query(`
-      INSERT INTO coin_transactions
-      (user_id, type, amount)
-      VALUES ($1, 'coin_purchase', $2)
-    `, [userId, coins]);
+INSERT INTO wallet_ledger
+(user_id, amount, type, purpose)
+VALUES ($1,$2,$3,$4)
+`,[
+ userId,
+ coins,
+ 'coin_purchase',
+ 'Coin Pack Purchase'
+]);
 
     res.json({
       success: true,

@@ -901,7 +901,7 @@ router.post("/themes/create-order", verifyToken, async (req, res) => {
 
       await pool.query(
         `
-        INSERT INTO user_theme_purchases
+        INSERT INTO theme_purchases
         (user_id, theme_code, payment_id)
         VALUES ($1,$2,$3)
         ON CONFLICT DO NOTHING
@@ -914,13 +914,14 @@ router.post("/themes/create-order", verifyToken, async (req, res) => {
       );
 
 await pool.query(`
-INSERT INTO wallet_transactions
-(user_id, type, coins, description)
-VALUES ($1, 'debit', $2, $3)
-`, [
-  userId,
-  coinsUsed,
-  'Theme Purchase - ' + theme_code
+INSERT INTO wallet_ledger
+(user_id, amount, type, purpose)
+VALUES ($1,$2,$3,$4)
+`,[
+ userId,
+ -coinsUsed,
+ 'theme_purchase',
+ 'Theme Purchase - ' + theme_code
 ]);
 
       return res.json({
@@ -1013,24 +1014,23 @@ router.post("/themes/verify", verifyToken, async (req, res) => {
 
     if (usedCoins > 0) {
 
-      await pool.query(`
-        UPDATE user_wallets
-        SET coins = GREATEST(coins - $1,0)
-        WHERE user_id = $2
-      `, [usedCoins, userId]);
+  await pool.query(`
+    UPDATE user_wallets
+    SET coins = GREATEST(coins - $1,0)
+    WHERE user_id = $2
+  `, [usedCoins, userId]);
 
-      /* wallet history using REAL schema */
-
-      await pool.query(`
-INSERT INTO wallet_transactions
-(recruiter_id, amount, type, purpose)
-VALUES ($1,$2,$3,$4)
-`,[
- userId,
- usedCoins,
- 'debit',
- 'Theme Purchase - ' + theme_code
-]);
+  await pool.query(`
+    INSERT INTO wallet_ledger
+    (user_id, amount, type, purpose)
+    VALUES ($1,$2,$3,$4)
+  `, [
+    userId,
+    -usedCoins,
+    'theme_purchase',
+    'Theme Purchase - ' + theme_code
+  ]);
+}
 
 await pool.query(`
 INSERT INTO orders
