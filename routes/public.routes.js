@@ -283,7 +283,7 @@ router.get('/api/feed', verifyToken, async (req, res) => {
     }
 
     query += `
-      GROUP BY posts.id, users.username, users.id
+      GROUP BY posts.id, users.username, users.id, posts.course
       ORDER BY posts.created_at DESC
       LIMIT 10 OFFSET $${values.length + 1}
     `;
