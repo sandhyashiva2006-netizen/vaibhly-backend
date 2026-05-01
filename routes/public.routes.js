@@ -254,6 +254,7 @@ router.get("/resume/me", verifyToken, async (req, res) => {
 
 router.get('/api/feed', verifyToken, async (req, res) => {
   try {
+
     const offset = parseInt(req.query.offset) || 0;
     const course = req.query.course;
 
@@ -275,7 +276,6 @@ router.get('/api/feed', verifyToken, async (req, res) => {
 
     const values = [];
 
-    // ✅ only filter if course is valid
     if (course && course.trim() !== "") {
       query += ` WHERE posts.course ILIKE $1`;
       values.push(`%${course}%`);
@@ -289,16 +289,13 @@ router.get('/api/feed', verifyToken, async (req, res) => {
 
     values.push(offset);
 
-    console.log("QUERY:", query);
-    console.log("VALUES:", values);
-
     const result = await pool.query(query, values);
 
-    return res.json(result.rows);
+    res.json(result.rows);
 
   } catch (err) {
-    console.error("🔥 FEED ERROR:", err.message);
-    return res.status(500).json({ error: err.message });
+    console.error("FEED ERROR:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
