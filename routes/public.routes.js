@@ -588,25 +588,28 @@ router.post('/api/posts/:id/comments', verifyToken, async (req, res) => {
   }
 });
 
-router.get('/api/posts/:id/comments', async (req, res) => {
+router.get('/api/posts/:id/comments', verifyToken, async (req, res) => {
   try {
 
     const postId = req.params.id;
+    const userId = req.user.id;
 
     const result = await pool.query(
-      `SELECT comments.*,
-              users.username
+      `SELECT 
+        comments.*, 
+        users.username,
+        (comments.user_id = $2) AS is_owner
        FROM comments
        JOIN users ON comments.user_id = users.id
-       WHERE post_id = $1
-       ORDER BY created_at ASC`,
-      [postId]
+       WHERE comments.post_id = $1
+       ORDER BY comments.created_at ASC`,
+      [postId, userId]
     );
 
     res.json(result.rows);
 
   } catch (err) {
-    console.error(err);
+    console.error("COMMENTS ERROR:", err);
     res.status(500).json({ error: "Load comments failed" });
   }
 });
