@@ -257,23 +257,42 @@ router.get('/api/feed', verifyToken, async (req, res) => {
   try {
 
     const offset = parseInt(req.query.offset) || 0;
+    const course = req.query.course;
 
-    const result = await pool.query(
-      `SELECT posts.id,
-              posts.title,
-              posts.content,
-              posts.likes,
-              posts.created_at,
-              users.username,
-              COUNT(comments.id) AS comment_count
-       FROM posts
-       JOIN users ON posts.user_id = users.id
-       LEFT JOIN comments ON comments.post_id = posts.id
-       GROUP BY posts.id, users.username
-       ORDER BY posts.created_at DESC
-       LIMIT 10 OFFSET $1`,
-      [offset]
-    );
+    let query = `
+      SELECT 
+        posts.id,
+        posts.title,
+        posts.content,
+        posts.likes,
+        posts.created_at,
+        posts.course,
+        users.username,
+        users.id AS user_id,
+        COUNT(comments.id) AS comment_count
+      FROM posts
+      JOIN users ON posts.user_id = users.id
+      LEFT JOIN comments ON comments.post_id = posts.id
+    `;
+
+    const values = [];
+
+    // ✅ APPLY FILTER IF COURSE EXISTS
+    if (course && course !== "") {
+      query += ` WHERE posts.course = $1`;
+      values.push(course);
+    }
+
+    // ✅ GROUP + ORDER + PAGINATION
+    query += `
+      GROUP BY posts.id, users.username, users.id
+      ORDER BY posts.created_at DESC
+      LIMIT 10 OFFSET $${values.length + 1}
+    `;
+
+    values.push(offset);
+
+    const result = await pool.query(query, values);
 
     console.log("Feed rows:", result.rows);
 
