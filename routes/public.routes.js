@@ -268,11 +268,11 @@ router.get('/api/feed', verifyToken, async (req, res) => {
         users.username,
         users.id AS user_id,
 
-        EXISTS (
-          SELECT 1 FROM follows 
-          WHERE follower_id = $2 
-          AND following_id = users.id
-        ) AS is_following,
+       EXISTS (
+  SELECT 1 FROM followers 
+  WHERE follower_id = $2 
+  AND following_id = users.id
+) AS is_following
 
         COUNT(comments.id)::int AS comment_count
 
