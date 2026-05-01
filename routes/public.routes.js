@@ -614,6 +614,56 @@ router.get('/api/posts/:id/comments', verifyToken, async (req, res) => {
   }
 });
 
+router.delete('/api/comments/:id', verifyToken, async (req, res) => {
+  try {
+    const commentId = req.params.id;
+    const userId = req.user.id;
+
+    const result = await pool.query(
+      `DELETE FROM comments 
+       WHERE id = $1 AND user_id = $2
+       RETURNING *`,
+      [commentId, userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(403).json({ error: "Not allowed" });
+    }
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("DELETE COMMENT ERROR:", err);
+    res.status(500).json({ error: "Delete failed" });
+  }
+});
+
+router.put('/api/comments/:id', verifyToken, async (req, res) => {
+  try {
+    const commentId = req.params.id;
+    const userId = req.user.id;
+    const { content } = req.body;
+
+    const result = await pool.query(
+      `UPDATE comments 
+       SET content = $1 
+       WHERE id = $2 AND user_id = $3
+       RETURNING *`,
+      [content, commentId, userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(403).json({ error: "Not allowed" });
+    }
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("EDIT COMMENT ERROR:", err);
+    res.status(500).json({ error: "Update failed" });
+  }
+});
+
 router.post('/api/users/:id/follow', verifyToken, async (req, res) => {
 
   const targetUserId = req.params.id;
