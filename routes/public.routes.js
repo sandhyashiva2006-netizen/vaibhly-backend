@@ -260,36 +260,33 @@ router.get('/api/feed', verifyToken, async (req, res) => {
 
     let query = `
       SELECT 
-        posts.id,
-        posts.title,
-        posts.content,
-        posts.likes,
-        posts.created_at,
-        posts.course,
-        users.username,
-        users.id AS user_id,
-        COUNT(comments.id)::int AS comment_count
-      FROM posts
-      JOIN users ON posts.user_id = users.id
-      LEFT JOIN comments ON comments.post_id = posts.id
-    `;
+  posts.id,
+  posts.title,
+  posts.content,
+  posts.likes,
+  posts.created_at,
+  users.username,
+  users.id AS user_id,
 
-    const values = [];
+  EXISTS (
+    SELECT 1 FROM follows 
+    WHERE follower_id = $2 
+    AND following_id = users.id
+  ) AS is_following,
 
-    if (course && course.trim() !== "") {
-      query += ` WHERE posts.course ILIKE $1`;
-      values.push(`%${course}%`);
-    }
+  COUNT(comments.id)::int AS comment_count
 
-    query += `
-      GROUP BY posts.id, users.id
-      ORDER BY posts.created_at DESC
-      LIMIT 10 OFFSET $${values.length + 1}
+FROM posts
+JOIN users ON posts.user_id = users.id
+LEFT JOIN comments ON comments.post_id = posts.id
+GROUP BY posts.id, users.id
+ORDER BY posts.created_at DESC
+LIMIT 10 OFFSET $1
     `;
 
     values.push(offset);
 
-    const result = await pool.query(query, values);
+    const result = await pool.query(query, [offset, req.user.id]);
 
     res.json(result.rows);
 
