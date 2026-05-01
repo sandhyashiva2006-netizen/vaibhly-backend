@@ -253,7 +253,6 @@ router.get("/resume/me", verifyToken, async (req, res) => {
 });
 
 router.get('/api/feed', verifyToken, async (req, res) => {
-
   try {
 
     const offset = parseInt(req.query.offset) || 0;
@@ -277,13 +276,12 @@ router.get('/api/feed', verifyToken, async (req, res) => {
 
     const values = [];
 
-    // ✅ APPLY FILTER IF COURSE EXISTS
-    if (course && course !== "") {
-      query += ` WHERE posts.course = $1`;
-      values.push(course);
+    // ✅ ONLY APPLY FILTER IF COURSE EXISTS AND NOT EMPTY
+    if (course && course.trim() !== "") {
+      query += ` WHERE posts.course ILIKE $1`;
+      values.push(`%${course}%`);
     }
 
-    // ✅ GROUP + ORDER + PAGINATION
     query += `
       GROUP BY posts.id, users.username, users.id
       ORDER BY posts.created_at DESC
@@ -294,15 +292,12 @@ router.get('/api/feed', verifyToken, async (req, res) => {
 
     const result = await pool.query(query, values);
 
-    console.log("Feed rows:", result.rows);
-
-    res.json(result.rows);
+    res.json(result.rows); // ALWAYS ARRAY
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Feed failed" });
+    console.error("FEED ERROR:", err);
+    res.status(500).json({ error: "Feed failed" }); // return JSON not HTML
   }
-
 });
 
 router.get('/api/profile/:username', async (req, res) => {
