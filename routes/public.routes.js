@@ -256,7 +256,6 @@ router.get('/api/feed', verifyToken, async (req, res) => {
   try {
 
     const offset = parseInt(req.query.offset) || 0;
-    const userId = req.user.id;
 
     const result = await pool.query(`
       SELECT 
@@ -267,13 +266,6 @@ router.get('/api/feed', verifyToken, async (req, res) => {
         posts.created_at,
         users.username,
         users.id AS user_id,
-
-       EXISTS (
-  SELECT 1 FROM followers 
-  WHERE follower_id = $2 
-  AND following_id = users.id
-) AS is_following
-
         COUNT(comments.id)::int AS comment_count
 
       FROM posts
@@ -284,7 +276,7 @@ router.get('/api/feed', verifyToken, async (req, res) => {
 
       ORDER BY posts.created_at DESC
       LIMIT 10 OFFSET $1
-    `, [offset, userId]);
+    `, [offset]);
 
     res.json(result.rows);
 
