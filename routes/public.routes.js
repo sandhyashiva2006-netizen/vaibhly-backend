@@ -256,37 +256,35 @@ router.get('/api/feed', verifyToken, async (req, res) => {
   try {
 
     const offset = parseInt(req.query.offset) || 0;
-    const course = req.query.course;
+    const userId = req.user.id;
 
-    let query = `
+    const result = await pool.query(`
       SELECT 
-  posts.id,
-  posts.title,
-  posts.content,
-  posts.likes,
-  posts.created_at,
-  users.username,
-  users.id AS user_id,
+        posts.id,
+        posts.title,
+        posts.content,
+        posts.likes,
+        posts.created_at,
+        users.username,
+        users.id AS user_id,
 
-  EXISTS (
-    SELECT 1 FROM follows 
-    WHERE follower_id = $2 
-    AND following_id = users.id
-  ) AS is_following,
+        EXISTS (
+          SELECT 1 FROM follows 
+          WHERE follower_id = $2 
+          AND following_id = users.id
+        ) AS is_following,
 
-  COUNT(comments.id)::int AS comment_count
+        COUNT(comments.id)::int AS comment_count
 
-FROM posts
-JOIN users ON posts.user_id = users.id
-LEFT JOIN comments ON comments.post_id = posts.id
-GROUP BY posts.id, users.id
-ORDER BY posts.created_at DESC
-LIMIT 10 OFFSET $1
-    `;
+      FROM posts
+      JOIN users ON posts.user_id = users.id
+      LEFT JOIN comments ON comments.post_id = posts.id
 
-    values.push(offset);
+      GROUP BY posts.id, users.id
 
-    const result = await pool.query(query, [offset, req.user.id]);
+      ORDER BY posts.created_at DESC
+      LIMIT 10 OFFSET $1
+    `, [offset, userId]);
 
     res.json(result.rows);
 
