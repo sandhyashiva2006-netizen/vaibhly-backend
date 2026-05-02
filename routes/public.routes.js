@@ -257,16 +257,24 @@ router.get('/api/feed', verifyToken, async (req, res) => {
 
     const offset = parseInt(req.query.offset) || 0;
 
-    const result = await pool.query(`
+    const result = await pool.query(query, [offset, req.user.id]);`
       SELECT 
-        posts.id,
-        posts.title,
-        posts.content,
-        posts.likes,
-        posts.created_at,
-        users.username,
-        users.id AS user_id,
-        COUNT(comments.id)::int AS comment_count
+  posts.id,
+  posts.title,
+  posts.content,
+  posts.likes,
+  posts.created_at,
+  users.username,
+  users.id AS user_id,
+
+  (
+    SELECT COUNT(*) > 0 
+    FROM followers f
+    WHERE f.follower_id = $2
+    AND f.following_id = users.id
+  ) AS is_following,
+
+  COUNT(comments.id)::int AS comment_count
 
       FROM posts
       JOIN users ON posts.user_id = users.id
