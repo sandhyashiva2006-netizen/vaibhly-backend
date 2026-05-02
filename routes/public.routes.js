@@ -256,25 +256,27 @@ router.get('/api/feed', verifyToken, async (req, res) => {
   try {
 
     const offset = parseInt(req.query.offset) || 0;
+    const userId = req.user.id;
 
-    const result = await pool.query(query, [offset, req.user.id]);`
+    const result = await pool.query(
+      `
       SELECT 
-  posts.id,
-  posts.title,
-  posts.content,
-  posts.likes,
-  posts.created_at,
-  users.username,
-  users.id AS user_id,
+        posts.id,
+        posts.title,
+        posts.content,
+        posts.likes,
+        posts.created_at,
+        users.username,
+        users.id AS user_id,
 
-  (
-    SELECT COUNT(*) > 0 
-    FROM followers f
-    WHERE f.follower_id = $2
-    AND f.following_id = users.id
-  ) AS is_following,
+        (
+          SELECT COUNT(*) > 0 
+          FROM followers f
+          WHERE f.follower_id = $2
+          AND f.following_id = users.id
+        ) AS is_following,
 
-  COUNT(comments.id)::int AS comment_count
+        COUNT(comments.id)::int AS comment_count
 
       FROM posts
       JOIN users ON posts.user_id = users.id
@@ -284,7 +286,9 @@ router.get('/api/feed', verifyToken, async (req, res) => {
 
       ORDER BY posts.created_at DESC
       LIMIT 10 OFFSET $1
-    `, [offset]);
+      `,
+      [offset, userId]
+    );
 
     res.json(result.rows);
 
